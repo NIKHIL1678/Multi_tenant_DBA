@@ -21,6 +21,9 @@ TEST_DATABASE_URL = os.environ.get(
 # The app reads DATABASE_URL; point it at the test DB before any app module caches settings.
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ.setdefault("APP_ENV", "test")
+os.environ.setdefault("JWT_SECRET", "test-only-secret-not-used-anywhere-else-0123456789")
+os.environ.setdefault("DEV_AUTH", "true")
+os.environ.setdefault("COOKIE_SECURE", "false")
 
 ROOT = Path(__file__).resolve().parents[1]
 
