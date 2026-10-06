@@ -45,5 +45,10 @@ CI fails if either file is out of date.
 
 - Colours only through tokens (`bg-primary`, `text-muted-foreground`, `border`…), never raw ones like `bg-blue-600`.
 - Every screen works from 360 px wide: tables become cards, actions wrap under the title.
+  Pattern: render the `<Table>` inside `hidden md:block` and a card `<ul>` with `md:hidden`, both from the same filtered list
+  (see `features/members/members-list.tsx`).
+- Choices: `NativeSelect` for short pickers (system picker on phones), `RolePicker`-style radio cards when meaning matters.
+- Anything that changes or removes something asks first with `ConfirmDialog`; success shows a toast, failure shows the
+  server's message inside the dialog.
 - Every data view has loading (skeleton), empty, error and no-access states.
 - Hide actions with `can(Permission.X)`; the server still checks everything.
