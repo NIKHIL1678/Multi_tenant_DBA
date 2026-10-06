@@ -38,6 +38,13 @@ class Settings(BaseSettings):
     # Browser origins allowed to call the API (the dashboard), comma-separated.
     cors_origins: str = "http://localhost:3000"
 
+    # --- Connectors -------------------------------------------------------------------
+    # Public URL the customer's connector calls (enrolment now, the gateway later).
+    connector_public_url: str = "http://localhost:8000"
+    # Docker image customers run; shown in the one-time install command.
+    connector_image: str = "ghcr.io/zipzy/dba-connector:0.1"
+    enrollment_token_minutes: int = 60
+
     @model_validator(mode="after")
     def _check_security(self) -> Self:
         if self.dev_auth and self.app_env not in ("development", "test"):
