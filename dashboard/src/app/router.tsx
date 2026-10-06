@@ -1,4 +1,4 @@
-import { Database, History, Layers, PlugZap, Settings } from 'lucide-react'
+import { Database, History, PlugZap, Settings } from 'lucide-react'
 import { createBrowserRouter } from 'react-router'
 
 import { HomeLayout } from '@/app/layouts/home-layout'
@@ -7,6 +7,7 @@ import { RequireAuth } from '@/app/require-auth'
 import { LoginPage } from '@/features/auth/login-page'
 import { ComingSoonPage } from '@/features/common/coming-soon-page'
 import { NotFoundContent, NotFoundPage } from '@/features/common/not-found-page'
+import { EnvironmentsPage } from '@/features/environments/environments-page'
 import { MembersPage } from '@/features/members/members-page'
 import { CompaniesPage } from '@/features/tenants/companies-page'
 import { OverviewPage } from '@/features/tenants/overview-page'
@@ -29,10 +30,7 @@ export const router = createBrowserRouter([
             path: 'databases',
             element: <ComingSoonPage icon={Database} title="Databases" description="Every database your connectors can reach." />,
           },
-          {
-            path: 'environments',
-            element: <ComingSoonPage icon={Layers} title="Environments" description="Production, staging and the rest." />,
-          },
+          { path: 'environments', element: <EnvironmentsPage /> },
           {
             path: 'connectors',
             element: <ComingSoonPage icon={PlugZap} title="Connectors" description="Programs inside your network that reach your databases." />,
