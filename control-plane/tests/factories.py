@@ -21,7 +21,13 @@ from app.rbac.catalog import Permission, SystemRole, system_role_id
 
 async def make_tenant(db: AsyncSession, **kw: object) -> Tenant:
     tid = uuid.uuid4()
-    t = Tenant(id=tid, name=f"Tenant {tid.hex[:8]}", slug=f"t-{tid.hex[:12]}", **kw)
+    fields: dict[str, object] = {
+        "id": tid,
+        "name": f"Tenant {tid.hex[:8]}",
+        "slug": f"t-{tid.hex[:12]}",
+    }
+    fields.update(kw)
+    t = Tenant(**fields)
     db.add(t)
     await db.flush()
     return t
@@ -83,7 +89,11 @@ async def make_custom_role(
 
 
 async def make_datasource(
-    db: AsyncSession, tenant: Tenant, env: Environment, created_by: User
+    db: AsyncSession,
+    tenant: Tenant,
+    env: Environment,
+    created_by: User,
+    engine: DbEngine = DbEngine.MYSQL,
 ) -> Datasource:
     c = Connector(
         tenant_id=tenant.id, name=f"conn-{uuid.uuid4().hex[:8]}", created_by=created_by.id
@@ -94,8 +104,8 @@ async def make_datasource(
         tenant_id=tenant.id,
         connector_id=c.id,
         environment_id=env.id,
-        local_name="main-mysql",
-        engine=DbEngine.MYSQL,
+        local_name=f"main-{engine}",
+        engine=engine,
     )
     db.add(ds)
     await db.flush()

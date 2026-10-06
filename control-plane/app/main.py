@@ -7,7 +7,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import auth, dev, health, me
+from app.api import auth, dev, health, me, tenants
 from app.api.errors import install_error_handlers
 from app.api.middleware import REQUEST_ID_HEADER, request_context
 from app.auth.current_user import DEV_USER_HEADER
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(auth.router)
     app.include_router(me.router)
+    app.include_router(tenants.router)
     if settings.dev_auth:
         app.include_router(dev.router)
     return app
