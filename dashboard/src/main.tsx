@@ -3,9 +3,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { RouterProvider } from 'react-router'
 
+import { router } from '@/app/router'
+import { Toaster } from '@/components/ui/sonner'
 import { ApiError } from '@/lib/api'
 import { AuthProvider } from '@/lib/auth'
-import { router } from '@/router'
+import { ThemeProvider } from '@/lib/theme'
 import './index.css'
 
 const queryClient = new QueryClient({
@@ -20,10 +22,13 @@ const queryClient = new QueryClient({
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </QueryClientProvider>
+    <ThemeProvider>
+      <QueryClientProvider client={queryClient}>
+        <AuthProvider>
+          <RouterProvider router={router} />
+        </AuthProvider>
+      </QueryClientProvider>
+      <Toaster />
+    </ThemeProvider>
   </StrictMode>,
 )

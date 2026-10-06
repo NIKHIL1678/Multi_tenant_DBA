@@ -138,3 +138,15 @@ export function describeError(err: unknown): string {
   }
   return 'Could not reach the server. Check your connection and try again.'
 }
+
+
+/** Server-side validation errors by field name, to show under each form input. */
+export function fieldErrors(err: unknown): Record<string, string> {
+  if (!(err instanceof ApiError) || !err.details) return {}
+  return Object.fromEntries(err.details.map((d) => [d.field, d.message]))
+}
+
+/** True for answers that mean "this does not exist for you" (also for a malformed id in the URL). */
+export function isNotFound(err: unknown): boolean {
+  return err instanceof ApiError && (err.status === 404 || err.status === 422)
+}

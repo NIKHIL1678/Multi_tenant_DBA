@@ -1,6 +1,7 @@
 # ZipZy DBA — dashboard
 
-React + Vite + TypeScript, Tailwind CSS, React Router, TanStack Query.
+React + Vite + TypeScript, Tailwind CSS with shadcn/ui-style components (Radix), React Router,
+TanStack Query.
 
 ## Run locally
 
@@ -17,12 +18,32 @@ npm run lint
 npm run build
 ```
 
+## API types
+
+`src/types/api.d.ts` is generated from the backend. After changing the API:
+
+```
+cd ../control-plane && uv run python scripts/export_openapi.py   # writes dashboard/openapi.json
+cd ../dashboard && npm run gen:api                               # writes src/types/api.d.ts
+```
+
+CI fails if either file is out of date.
+
 ## Where things live
 
 | Path | What |
 |---|---|
-| `src/lib/api.ts` | The only code that calls the backend: tokens, refresh, errors |
-| `src/lib/auth.tsx`, `auth-context.ts` | Who is signed in |
-| `src/lib/types.ts` | API response shapes |
-| `src/pages/` | One file per screen |
-| `src/components/` | Layout, auth guard, small UI pieces (`ui/`) |
+| `src/app/` | Router, auth guard, layouts (sidebar, top bar, company switcher, user menu) |
+| `src/features/<area>/` | One folder per backend area: `api.ts` (data hooks) + its pages |
+| `src/components/ui/` | Design-system pieces (button, card, dialog, table, …). Use these, never raw HTML styles |
+| `src/components/` | Shared page pieces: page header, empty state, error box |
+| `src/lib/` | API client, auth, theme, permissions, company context, helpers |
+| `src/types/api.d.ts` | Generated API types (do not edit) |
+| `src/index.css` | Design tokens: the only place colours, radius and font are defined |
+
+## UI rules
+
+- Colours only through tokens (`bg-primary`, `text-muted-foreground`, `border`…), never raw ones like `bg-blue-600`.
+- Every screen works from 360 px wide: tables become cards, actions wrap under the title.
+- Every data view has loading (skeleton), empty, error and no-access states.
+- Hide actions with `can(Permission.X)`; the server still checks everything.
