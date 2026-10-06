@@ -4,8 +4,8 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
-from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.dialects.postgresql import CITEXT, INET, UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import (
     TIMESTAMPTZ,
@@ -106,7 +106,6 @@ class Invitation(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
     revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
     created_at: Mapped[datetime] = created_at_col()
-    
 
 
 class AuthSession(Base):
@@ -130,4 +129,4 @@ class AuthSession(Base):
     user_agent: Mapped[str | None] = mapped_column(String(300))
     ip_address: Mapped[str | None] = mapped_column(INET)
     created_at: Mapped[datetime] = created_at_col()
-    last_used_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)    
+    last_used_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
