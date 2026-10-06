@@ -1,8 +1,8 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.devtools.seed import seed
-from app.models import Environment, Tenant, TenantMember, User
+from app.devtools.seed import DEMO_DATABASES, seed, seed_demo_databases
+from app.models import Datasource, Environment, Tenant, TenantMember, User
 from app.rbac.catalog import Permission
 from app.rbac.service import resolve_access
 
@@ -31,3 +31,23 @@ async def test_seed_is_idempotent_and_wires_roles(db: AsyncSession) -> None:
     anywhere = await resolve_access(db, user_id=dev.id, tenant_id=sharma.id)
     assert in_prod is not None and not in_prod.has(Permission.DATA_READ)
     assert anywhere is not None and anywhere.has(Permission.DATA_READ)
+
+
+async def test_demo_databases_land_in_their_environments_once(db: AsyncSession) -> None:
+    await seed(db)
+    assert set(await seed_demo_databases(db)) == {"Sharma Textiles", "Gupta Foods"}
+    assert await seed_demo_databases(db) == []
+
+    sharma = await db.scalar(select(Tenant).where(Tenant.slug == "sharma-textiles"))
+    assert sharma is not None
+    rows = (
+        await db.execute(
+            select(Datasource.local_name, Environment.name, Datasource.status)
+            .join(Environment, Environment.id == Datasource.environment_id)
+            .where(Datasource.tenant_id == sharma.id)
+        )
+    ).all()
+    assert len(rows) == len(DEMO_DATABASES["sharma-textiles"])
+    placed = {name: (env, status) for name, env, status in rows}
+    assert placed["payroll"] == ("staging", "connected")
+    assert placed["analytics"] == ("production", "error")

@@ -168,7 +168,7 @@ export function EnvironmentsPage() {
                           <ProtectionBadge production={env.is_production} />
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          <DatabaseCount count={env.datasource_count} />
+                          <DatabaseCount id={env.id} count={env.datasource_count} />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground" title={formatDateTime(env.created_at)}>
                           {formatDate(env.created_at)}
@@ -190,7 +190,7 @@ export function EnvironmentsPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
                       <ProtectionBadge production={env.is_production} />
-                      <DatabaseCount count={env.datasource_count} withLabel />
+                      <DatabaseCount id={env.id} count={env.datasource_count} withLabel />
                       <span className="text-xs text-muted-foreground">Created {formatDate(env.created_at)}</span>
                     </div>
                   </li>
@@ -257,11 +257,11 @@ function ProtectionBadge({ production }: { production: boolean }) {
   return production ? <Badge variant="warning">Production</Badge> : <Badge variant="secondary">Standard</Badge>
 }
 
-function DatabaseCount({ count, withLabel = false }: { count: number; withLabel?: boolean }) {
+function DatabaseCount({ id, count, withLabel = false }: { id: string; count: number; withLabel?: boolean }) {
   const text = withLabel ? `${count} database${count === 1 ? '' : 's'}` : String(count)
   if (count === 0) return <span className="text-muted-foreground">{text}</span>
   return (
-    <Link to="../databases" className="font-medium text-primary underline-offset-4 hover:underline">
+    <Link to={`../databases?environmentId=${id}`} className="font-medium text-primary underline-offset-4 hover:underline">
       {text}
     </Link>
   )
