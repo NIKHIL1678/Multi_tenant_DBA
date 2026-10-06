@@ -8,6 +8,7 @@ from collections.abc import Awaitable, Callable
 
 from fastapi import Request, Response
 
+from app.api.errors import internal_error_response
 from app.core.logging import request_id_var, tenant_id_var, user_id_var
 
 logger = logging.getLogger("app.request")
@@ -30,7 +31,11 @@ async def request_context(
     start = time.perf_counter()
     status_code = 500
     try:
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.exception("unhandled error")
+            response = internal_error_response()
         status_code = response.status_code
         response.headers[REQUEST_ID_HEADER] = request_id
         return response

@@ -15,7 +15,6 @@ class TenantStatus(StrEnum):
 
 
 class AuthProvider(StrEnum):
-    ZIPZY_ACCOUNTS = "zipzy_accounts"
     GOOGLE = "google"
     PASSWORD = "password"  # noqa: S105 - enum label, not a secret
 

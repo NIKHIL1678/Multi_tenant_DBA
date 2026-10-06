@@ -32,7 +32,7 @@ async def make_user(db: AsyncSession, **kw: object) -> User:
     fields: dict[str, object] = {
         "id": uid,
         "email": f"{uid.hex[:12]}@example.test",
-        "auth_provider": AuthProvider.ZIPZY_ACCOUNTS,
+        "auth_provider": AuthProvider.PASSWORD,
         "external_id": str(uid),
     }
     fields.update(kw)
