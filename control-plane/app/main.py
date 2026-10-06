@@ -8,6 +8,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api import (
+    audit_log,
     auth,
     connectors,
     datasources,
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     app.include_router(connectors.tenant_router)
     app.include_router(connectors.public_router)
     app.include_router(datasources.router)
+    app.include_router(audit_log.router)
     if settings.dev_auth:
         app.include_router(dev.router)
     return app
