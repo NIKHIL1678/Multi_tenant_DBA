@@ -164,7 +164,7 @@ export function ConnectorsPage() {
                           <LastSeen connector={c} now={now} />
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          <DatabaseCount count={c.datasource_count} />
+                          <DatabaseCount id={c.id} count={c.datasource_count} />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground" title={formatDateTime(c.created_at)}>
                           {formatDate(c.created_at)}
@@ -189,7 +189,7 @@ export function ConnectorsPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
                       <ConnectorStatusBadge status={c.status} />
-                      <DatabaseCount count={c.datasource_count} withLabel />
+                      <DatabaseCount id={c.id} count={c.datasource_count} withLabel />
                     </div>
                     <p className="text-xs text-muted-foreground">
                       <LastSeen connector={c} now={now} />
@@ -252,14 +252,14 @@ function LastSeen({ connector: c, now }: { connector: Connector; now: number }) 
   )
 }
 
-function DatabaseCount({ count, withLabel = false }: { count: number; withLabel?: boolean }) {
+function DatabaseCount({ id, count, withLabel = false }: { id: string; count: number; withLabel?: boolean }) {
   const text = withLabel ? `${count} database${count === 1 ? '' : 's'}` : String(count)
   if (count === 0) return <span className="text-muted-foreground">{text}</span>
-  return (
-    <Link to="../databases" className="font-medium text-primary underline-offset-4 hover:underline">
-      {text}
-    </Link>
-  )
+    return (
+        <Link to={`../databases?connector=${id}`} className="font-medium text-primary underline-offset-4 hover:underline">
+         {text}
+        </Link>
+    )
 }
 
 function ListSkeleton() {
