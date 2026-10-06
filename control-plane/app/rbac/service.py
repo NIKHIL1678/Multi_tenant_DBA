@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
     Datasource,
+    Environment,
     MemberEnvironmentRole,
     Role,
     RolePermission,
@@ -132,3 +133,52 @@ async def has_permission(
         session, user_id=user_id, tenant_id=tenant_id, environment_id=environment_id
     )
     return ctx is not None and ctx.has(permission)
+
+
+async def environments_with_permission(
+    session: AsyncSession, *, user_id: uuid.UUID, tenant_id: uuid.UUID, permission: Permission
+) -> set[uuid.UUID]:
+    """Every environment of the tenant where the user effectively has `permission`.
+
+    Same rules as resolve_access, but for all environments at once (a tenant may have
+    hundreds): an override decides inside its environment, the tenant-wide role decides
+    everywhere else, and an override pointing at another tenant's role grants nothing.
+    """
+    base = await resolve_access(session, user_id=user_id, tenant_id=tenant_id)
+    if base is None:
+        return set()
+
+    env_ids = set(
+        (
+            await session.scalars(select(Environment.id).where(Environment.tenant_id == tenant_id))
+        ).all()
+    )
+    overrides = dict(
+        (
+            await session.execute(
+                select(MemberEnvironmentRole.environment_id, MemberEnvironmentRole.role_id).where(
+                    MemberEnvironmentRole.member_id == base.member_id
+                )
+            )
+        ).all()
+    )
+    granting_roles: set[uuid.UUID] = set()
+    if overrides:
+        granting_roles = set(
+            (
+                await session.scalars(
+                    select(Role.id)
+                    .join(RolePermission, RolePermission.role_id == Role.id)
+                    .where(
+                        Role.id.in_(set(overrides.values())),
+                        or_(Role.tenant_id.is_(None), Role.tenant_id == tenant_id),
+                        RolePermission.permission_key == str(permission),
+                    )
+                )
+            ).all()
+        )
+    return {
+        env_id
+        for env_id in env_ids
+        if (overrides[env_id] in granting_roles if env_id in overrides else base.has(permission))
+    }

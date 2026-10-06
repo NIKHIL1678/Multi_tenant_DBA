@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import (
     auth,
     connectors,
+    datasources,
     dev,
     environments,
     health,
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
     app.include_router(environments.router)
     app.include_router(connectors.tenant_router)
     app.include_router(connectors.public_router)
+    app.include_router(datasources.router)
     if settings.dev_auth:
         app.include_router(dev.router)
     return app
