@@ -4,8 +4,8 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import ForeignKey, Index, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import CITEXT, UUID
 from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.dialects.postgresql import CITEXT, INET, UUID
 
 from app.models.base import (
     TIMESTAMPTZ,
@@ -51,6 +51,8 @@ class User(Base):
     full_name: Mapped[str | None] = mapped_column(String(150))
     auth_provider: Mapped[str] = mapped_column(Text, nullable=False)
     external_id: Mapped[str | None] = mapped_column(Text)
+    # Argon2id hash; NULL for users who sign in with an external provider.
+    password_hash: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(Text, nullable=False, default=UserStatus.ACTIVE)
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()
@@ -104,3 +106,28 @@ class Invitation(Base):
     accepted_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
     revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
     created_at: Mapped[datetime] = created_at_col()
+    
+
+
+class AuthSession(Base):
+    """One signed-in device. Stores only the hash of its refresh token.
+
+    Revoking the row signs that device out.
+    """
+
+    __tablename__ = "auth_sessions"
+    __table_args__ = (Index(None, "user_id"),)
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    refresh_token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    expires_at: Mapped[datetime] = mapped_column(TIMESTAMPTZ, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+    # Set when this session was rotated; the token it was replaced by.
+    replaced_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True))
+    user_agent: Mapped[str | None] = mapped_column(String(300))
+    ip_address: Mapped[str | None] = mapped_column(INET)
+    created_at: Mapped[datetime] = created_at_col()
+    last_used_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)    
