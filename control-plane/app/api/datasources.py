@@ -1,0 +1,191 @@
+"""Datasources (the customer's databases).
+
+GET    /v1/tenants/{tenant_id}/datasources                 filters: environment_id, connector_id,
+                                                           engine, status
+GET    /v1/tenants/{tenant_id}/datasources/{datasource_id}
+PATCH  /v1/tenants/{tenant_id}/datasources/{datasource_id}  {environment_id}  move
+DELETE /v1/tenants/{tenant_id}/datasources/{datasource_id}
+
+Permissions are checked PER ENVIRONMENT (overrides apply), not just company-wide:
+- see:    metadata.read in the datasource's environment (otherwise it looks like it doesn't exist)
+- change: datasources.manage there (and in the target environment when moving)
+- taking it out of production: also org.manage
+New datasources are not created here: connectors report them (see services.datasources).
+"""
+
+import uuid
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, Query, Request, status
+
+from app.api.errors import ApiError, forbidden, not_found
+from app.audit import record_audit
+from app.auth.current_user import CurrentUser, DbSession
+from app.auth.permissions import require_member
+from app.models.enums import DatasourceStatus, DbEngine
+from app.rbac.catalog import Permission
+from app.rbac.service import AccessContext, environments_with_permission
+from app.schemas.datasources import (
+    ConnectorRef,
+    DatasourceMoveIn,
+    DatasourceOut,
+    EnvironmentRef,
+)
+from app.services import datasources as svc
+
+router = APIRouter(prefix="/v1/tenants/{tenant_id}/datasources", tags=["datasources"])
+
+Member = Annotated[AccessContext, Depends(require_member)]
+
+
+def _out(info: svc.DatasourceInfo) -> DatasourceOut:
+    d, c, e = info.datasource, info.connector, info.environment
+    return DatasourceOut(
+        id=d.id,
+        local_name=d.local_name,
+        engine=d.engine,
+        version=d.version,
+        status=d.status,
+        capabilities=d.capabilities,
+        last_checked_at=d.last_checked_at,
+        connector=ConnectorRef(id=c.id, name=c.name, status=c.status),
+        environment=EnvironmentRef(id=e.id, name=e.name, is_production=e.is_production),
+        created_at=d.created_at,
+    )
+
+
+def _translate(exc: Exception) -> ApiError:
+    if isinstance(exc, svc.DatasourceNotFoundError):
+        return not_found("Datasource")
+    if isinstance(exc, svc.EnvironmentNotFoundError):
+        return not_found("Environment")
+    if isinstance(exc, svc.NotAllowedError):
+        return forbidden("You cannot manage databases in this environment.")
+    if isinstance(exc, svc.NeedsOrgManageError):
+        return forbidden("Only an Owner can take a database out of production.")
+    raise exc
+
+
+_RULE_ERRORS = (
+    svc.DatasourceNotFoundError,
+    svc.EnvironmentNotFoundError,
+    svc.NotAllowedError,
+    svc.NeedsOrgManageError,
+)
+
+
+@router.get("")
+async def list_datasources(
+    tenant_id: uuid.UUID,
+    _: Member,
+    user: CurrentUser,
+    session: DbSession,
+    environment_id: uuid.UUID | None = None,
+    connector_id: uuid.UUID | None = None,
+    engine: Annotated[DbEngine | None, Query()] = None,
+    status: Annotated[DatasourceStatus | None, Query()] = None,
+) -> list[DatasourceOut]:
+    visible = await environments_with_permission(
+        session, user_id=user.user_id, tenant_id=tenant_id, permission=Permission.METADATA_READ
+    )
+    infos = await svc.list_datasources(
+        session,
+        tenant_id=tenant_id,
+        visible_environments=visible,
+        environment_id=environment_id,
+        connector_id=connector_id,
+        engine=engine,
+        status=status,
+    )
+    return [_out(i) for i in infos]
+
+
+@router.get("/{datasource_id}")
+async def get_datasource(
+    tenant_id: uuid.UUID,
+    datasource_id: uuid.UUID,
+    _: Member,
+    user: CurrentUser,
+    session: DbSession,
+) -> DatasourceOut:
+    try:
+        info = await svc.get_visible(
+            session, user_id=user.user_id, tenant_id=tenant_id, datasource_id=datasource_id
+        )
+    except _RULE_ERRORS as exc:
+        raise _translate(exc) from None
+    return _out(info)
+
+
+@router.patch("/{datasource_id}")
+async def move_datasource(
+    tenant_id: uuid.UUID,
+    datasource_id: uuid.UUID,
+    body: DatasourceMoveIn,
+    _: Member,
+    user: CurrentUser,
+    session: DbSession,
+    request: Request,
+) -> DatasourceOut:
+    try:
+        info, source = await svc.move_datasource(
+            session,
+            user_id=user.user_id,
+            tenant_id=tenant_id,
+            datasource_id=datasource_id,
+            environment_id=body.environment_id,
+        )
+    except _RULE_ERRORS as exc:
+        raise _translate(exc) from None
+
+    if source is not None:
+        await record_audit(
+            session,
+            tenant_id=tenant_id,
+            actor_id=user.user_id,
+            action="datasource.moved",
+            target_type="datasource",
+            target_id=datasource_id,
+            details={
+                "name": info.datasource.local_name,
+                "from": source.name,
+                "to": info.environment.name,
+            },
+            request=request,
+        )
+        await session.commit()
+    return _out(info)
+
+
+@router.delete("/{datasource_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_datasource(
+    tenant_id: uuid.UUID,
+    datasource_id: uuid.UUID,
+    _: Member,
+    user: CurrentUser,
+    session: DbSession,
+    request: Request,
+) -> None:
+    try:
+        info = await svc.delete_datasource(
+            session, user_id=user.user_id, tenant_id=tenant_id, datasource_id=datasource_id
+        )
+    except _RULE_ERRORS as exc:
+        raise _translate(exc) from None
+
+    await record_audit(
+        session,
+        tenant_id=tenant_id,
+        actor_id=user.user_id,
+        action="datasource.deleted",
+        target_type="datasource",
+        target_id=datasource_id,
+        details={
+            "name": info.datasource.local_name,
+            "engine": info.datasource.engine,
+            "environment": info.environment.name,
+            "connector": info.connector.name,
+        },
+        request=request,
+    )
+    await session.commit()
