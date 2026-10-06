@@ -10,6 +10,19 @@ export default defineConfig({
   resolve: {
     alias: { '@': path.resolve(import.meta.dirname, 'src') },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        // Libraries change rarely: keep them in their own file so browsers cache it across our releases.
+        codeSplitting: {
+          groups: [
+            { name: 'react', test: /node_modules[\\/](react|react-dom|react-router|scheduler)[\\/]/ },
+            { name: 'vendor', test: /node_modules[\\/]/ },
+          ],
+        },
+      },
+    },
+  },
   server: {
     port: 5173,
     strictPort: true,

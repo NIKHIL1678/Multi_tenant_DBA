@@ -57,19 +57,31 @@ jobs:
 
       - name: Tests (includes migrations up/down and drift check)
         run: uv run pytest -q
-    dashboard:
-      runs-on: ubuntu-latest
-      timeout-minutes: 10
-      defaults:
-        run:
-          working-directory: dashboard
-      steps:
-        - uses: actions/checkout@v4
-        - uses: actions/setup-node@v4
-          with:
-            node-version: 22
-            cache: npm
-            cache-dependency-path: dashboard/package-lock.json
-        - run: npm ci
-        - run: npm run lint
-        - run: npm run build      
+
+      - name: API schema for the dashboard is up to date
+        run: |
+          uv run python scripts/export_openapi.py
+          git diff --exit-code ../dashboard/openapi.json || (echo "Run: uv run python scripts/export_openapi.py" && exit 1)
+
+  dashboard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+      - run: npm ci
+
+      - name: Generated API types are up to date
+        run: |
+          npm run gen:api
+          git diff --exit-code src/types/api.d.ts || (echo "Run: npm run gen:api" && exit 1)
+
+      - run: npm run lint
+      - run: npm run build

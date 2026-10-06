@@ -1,42 +1,12 @@
-// Shapes returned by the control-plane API (see control-plane/app/schemas/).
-// Later these will be generated automatically from /openapi.json.
+// Friendly names for the API shapes. The shapes themselves are GENERATED from the backend
+// (src/types/api.d.ts, via `npm run gen:api`), so they can never drift from the real API.
 
-export type TokenOut = {
-  access_token: string
-  token_type: 'bearer'
-  expires_in: number
-}
+import type { components } from '@/types/api'
 
-export type Membership = {
-  tenant_id: string
-  tenant_name: string
-  tenant_slug: string
-  role_key: string
-  role_name: string
-}
+type Schemas = components['schemas']
 
-export type Me = {
-  id: string
-  email: string
-  full_name: string | null
-  memberships: Membership[]
-}
-
-export type Tenant = {
-  id: string
-  name: string
-  slug: string
-  plan: string
-  status: string
-  created_at: string
-  my_role_key: string
-  my_permissions: string[]
-}
-
-export type TenantOverview = {
-  tenant_id: string
-  environments: number
-  members: number
-  connectors_by_status: Record<string, number>
-  datasources_by_engine: Record<string, number>
-}
+export type TokenOut = Schemas['TokenOut']
+export type Me = Schemas['MeOut']
+export type Membership = Schemas['MembershipOut']
+export type Tenant = Schemas['TenantOut']
+export type TenantOverview = Schemas['TenantOverviewOut']
