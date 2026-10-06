@@ -75,9 +75,12 @@ async def get_environment(
     return EnvironmentInfo(environment=row[0], datasource_count=row[1])
 
 
-async def _save(session: AsyncSession, env: Environment) -> None:
+async def _save(session: AsyncSession, env: Environment, **values: Any) -> None:
+    """Insert or update inside a savepoint, so a duplicate name leaves the session usable."""
     try:
         async with session.begin_nested():
+            for key, value in values.items():
+                setattr(env, key, value)
             session.add(env)
             await session.flush()
     except IntegrityError as exc:
@@ -110,14 +113,12 @@ async def update_environment(
         if env.is_production and Permission.ORG_MANAGE not in actor_permissions:
             raise NeedsOrgManageError
         changes["is_production"] = {"from": env.is_production, "to": is_production}
-        env.is_production = is_production
 
     if name is not None and name != env.name:
         changes["name"] = {"from": env.name, "to": name}
-        env.name = name
 
     if changes:
-        await _save(session, env)
+        await _save(session, env, **{key: change["to"] for key, change in changes.items()})
     return info, changes
 
 

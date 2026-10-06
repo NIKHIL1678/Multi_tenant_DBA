@@ -204,3 +204,15 @@ async def test_only_owner_can_delete_production(api: AsyncClient, db: AsyncSessi
     qa = await make_env(db, t, "qa")
     assert (await api.delete(url(t, prod.id), headers=hdr(dba))).status_code == 403
     assert (await api.delete(url(t, qa.id), headers=hdr(dba))).status_code == 204
+
+
+async def test_failed_rename_leaves_request_usable(api: AsyncClient, db: AsyncSession) -> None:
+    t, u = await company(db)
+    await make_env(db, t, "staging")
+    env = await make_env(db, t, "qa")
+    env_url, headers = url(t, env.id), hdr(u)
+    r = await api.patch(env_url, json={"name": "staging"}, headers=headers)
+    assert r.status_code == 409
+    # The same session keeps working afterwards (no broken transaction).
+    r = await api.patch(env_url, json={"name": "qa-2"}, headers=headers)
+    assert r.status_code == 200 and r.json()["name"] == "qa-2"
