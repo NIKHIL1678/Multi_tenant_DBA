@@ -1,9 +1,10 @@
-  import { History, Settings } from 'lucide-react'
+import { Settings } from 'lucide-react'
 import { createBrowserRouter } from 'react-router'
 
 import { HomeLayout } from '@/app/layouts/home-layout'
 import { TenantLayout } from '@/app/layouts/tenant-layout'
 import { RequireAuth } from '@/app/require-auth'
+import { AuditPage } from '@/features/audit/audit-page'
 import { LoginPage } from '@/features/auth/login-page'
 import { ComingSoonPage } from '@/features/common/coming-soon-page'
 import { NotFoundContent, NotFoundPage } from '@/features/common/not-found-page'
@@ -32,10 +33,7 @@ export const router = createBrowserRouter([
           { path: 'environments', element: <EnvironmentsPage /> },
           { path: 'connectors', element: <ConnectorsPage /> },
           { path: 'members', element: <MembersPage /> },
-          {
-            path: 'audit',
-            element: <ComingSoonPage icon={History} title="Audit log" description="Who did what, and when." />,
-          },
+          { path: 'audit', element: <AuditPage /> },
           {
             path: 'settings',
             element: <ComingSoonPage icon={Settings} title="Settings" description="Company name and details." />,

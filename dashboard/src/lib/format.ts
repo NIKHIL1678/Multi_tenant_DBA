@@ -41,3 +41,25 @@ export function formatRelative(iso: string, now: number): string {
   }
   return 'now'
 }
+
+
+const timeFormat = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit' })
+
+/** "1:04 pm" */
+export function formatTime(iso: string): string {
+  return timeFormat.format(new Date(iso))
+}
+
+/** Local calendar day key, e.g. "2026-10-06", for grouping by day. */
+export function dayKey(iso: string | number): string {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+/** "Today", "Yesterday" or "6 Oct 2026". */
+export function formatDay(iso: string, now: number): string {
+  const key = dayKey(iso)
+  if (key === dayKey(now)) return 'Today'
+  if (key === dayKey(now - 86_400_000)) return 'Yesterday'
+  return formatDate(iso)
+}
