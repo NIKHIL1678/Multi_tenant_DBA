@@ -156,7 +156,7 @@ async def get_member(
     return found[0]
 
 
-def _check_can_manage(actor_perms: frozenset[str], target_perms: frozenset[str]) -> None:
+def check_can_manage(actor_perms: frozenset[str], target_perms: frozenset[str]) -> None:
     if not target_perms <= actor_perms:
         raise EscalationError
 
@@ -195,14 +195,14 @@ async def update_member(
     info = await get_member(session, tenant_id, member_id)
     member = info.member
     current = await get_role(session, tenant_id, member.role_id)
-    _check_can_manage(actor_permissions, current.permissions)
+    check_can_manage(actor_permissions, current.permissions)
 
     changes: dict[str, Any] = {}
     is_active_owner = member.role_id == OWNER_ROLE_ID and member.status == MemberStatus.ACTIVE
 
     if role_id is not None and role_id != member.role_id:
         new = await get_role(session, tenant_id, role_id)
-        _check_can_manage(actor_permissions, new.permissions)
+        check_can_manage(actor_permissions, new.permissions)
         if is_active_owner:
             await _ensure_another_owner(session, tenant_id, member.id)
         changes["role"] = {"from": current.role.key, "to": new.role.key}
@@ -238,7 +238,7 @@ async def set_environment_role(
     """
     info = await get_member(session, tenant_id, member_id)
     current = await get_role(session, tenant_id, info.member.role_id)
-    _check_can_manage(actor_permissions, current.permissions)
+    check_can_manage(actor_permissions, current.permissions)
 
     env = await session.scalar(
         select(Environment).where(
@@ -248,7 +248,7 @@ async def set_environment_role(
     if env is None:
         raise EnvironmentNotFoundError
     new = await get_role(session, tenant_id, role_id)
-    _check_can_manage(actor_permissions, new.permissions)
+    check_can_manage(actor_permissions, new.permissions)
 
     previous = next(
         (er.role.key for er in info.environment_roles if er.environment_id == environment_id),
@@ -275,14 +275,14 @@ async def remove_environment_role(
     """Remove an override (the member's company-wide role applies again). Returns the old key."""
     info = await get_member(session, tenant_id, member_id)
     current = await get_role(session, tenant_id, info.member.role_id)
-    _check_can_manage(actor_permissions, current.permissions)
+    check_can_manage(actor_permissions, current.permissions)
 
     existing = next(
         (er for er in info.environment_roles if er.environment_id == environment_id), None
     )
     if existing is None:
         raise EnvironmentNotFoundError
-    _check_can_manage(
+    check_can_manage(
         actor_permissions, (await get_role(session, tenant_id, existing.role.id)).permissions
     )
     await session.execute(
