@@ -11,7 +11,7 @@ export function RequireAuth() {
   if (state.status === 'loading') return <FullPageSpinner />
   if (state.status === 'signed-out') {
     // Remember where they wanted to go; the login page sends them back there.
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    return <Navigate to="/login" replace state={{ from: location.pathname + location.search + location.hash }} />
   }
   return <Outlet />
 }

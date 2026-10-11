@@ -32,3 +32,12 @@ export function useCreateTenant() {
     onSuccess: (tenant) => queryClient.setQueryData(tenantKeys.detail(tenant.id), tenant),
   })
 }
+
+
+export function useRenameTenant(tenantId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (name: string) => api<Tenant>(`/v1/tenants/${tenantId}`, { method: 'PATCH', body: { name } }),
+    onSuccess: (tenant) => queryClient.setQueryData(tenantKeys.detail(tenant.id), tenant),
+  })
+}
