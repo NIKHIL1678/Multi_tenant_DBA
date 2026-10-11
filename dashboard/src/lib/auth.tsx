@@ -54,6 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [reloadMe],
   )
 
+  const signup = useCallback(
+    async ({ email, password, fullName }: { email: string; password: string; fullName: string }) => {
+      const token = await api<TokenOut>('/v1/auth/signup', {
+        method: 'POST',
+        body: { email, password, full_name: fullName },
+      })
+      setAccessToken(token.access_token)
+      await reloadMe()
+    },
+    [reloadMe],
+  )
+
   const logout = useCallback(async () => {
     try {
       await api<void>('/v1/auth/logout', { method: 'POST' })
@@ -62,6 +74,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [signOutLocally])
 
-  const value = useMemo(() => ({ state, login, logout, reloadMe }), [state, login, logout, reloadMe])
+  const value = useMemo(
+    () => ({ state, login, signup, logout, reloadMe }),
+    [state, login, signup, logout, reloadMe],
+  )
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

@@ -15,7 +15,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: 'connectors', label: 'Connectors', icon: PlugZap },
   { to: 'members', label: 'Members', icon: Users },
   { to: 'audit', label: 'Audit log', icon: History, needs: Permission.AuditRead },
-  { to: 'settings', label: 'Settings', icon: Settings, needs: Permission.OrgManage },
+  { to: 'settings', label: 'Settings', icon: Settings },
 ]
 
 export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
