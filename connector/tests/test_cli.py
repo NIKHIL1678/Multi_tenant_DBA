@@ -37,6 +37,7 @@ databases:
     out = capsys.readouterr().out
     assert code == 1
     assert "OK    good" in out and "FAIL  broken" in out
+    assert "database" in out.split("OK    good")[1].splitlines()[0], "catalog count is shown"
     assert good.resolve_password() not in out
 
 

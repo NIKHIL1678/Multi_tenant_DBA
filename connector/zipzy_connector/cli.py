@@ -31,6 +31,14 @@ async def probe_all(config: ConnectorFile) -> list[ProbeResult]:
     return list(await asyncio.gather(*(probe(db) for db in config.databases)))
 
 
+def _catalog_note(r: ProbeResult) -> str:
+    if r.catalog is None:
+        return ""
+    count = len(r.catalog["databases"])
+    more = "+" if r.catalog["truncated"] else ""
+    return f", {count}{more} database{'' if count == 1 else 's'}"
+
+
 def _print_table(results: list[ProbeResult]) -> None:
     if not results:
         print("No databases in the settings file yet.")
@@ -38,11 +46,21 @@ def _print_table(results: list[ProbeResult]) -> None:
     width = max(len(r.name) for r in results)
     for r in results:
         status = "OK  " if r.reachable else "FAIL"
-        detail = f"{r.engine} {r.version}" if r.reachable else (r.error or "unreachable")
-        warning = ""
-        if r.reachable and r.capabilities.get("least_privilege") is False:
-            warning = "  (warning: this user can change data; use a read-only monitoring user)"
-        print(f"{status}  {r.name.ljust(width)}  {detail}{warning}")
+        detail = (
+            f"{r.engine} {r.version}{_catalog_note(r)}"
+            if r.reachable
+            else (r.error or "unreachable")
+        )
+        print(f"{status}  {r.name.ljust(width)}  {detail}")
+        if not r.reachable:
+            continue
+        if r.capabilities.get("least_privilege") is False:
+            print("      warning: this user can change data; use a read-only monitoring user")
+        if r.capabilities.get("list_databases") is False:
+            print(
+                "      note: this user cannot list the databases on the server; "
+                "GRANT SHOW DATABASES, SHOW VIEW ON *.* to it (see README)"
+            )
 
 
 async def cmd_check(config_path: str | None) -> int:

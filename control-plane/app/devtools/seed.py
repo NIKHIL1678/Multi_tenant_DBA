@@ -26,7 +26,7 @@ from app.models import (
 )
 from app.models.enums import AuthProvider, ConnectorStatus, TenantPlan
 from app.rbac.catalog import SystemRole, system_role_id
-from app.schemas.datasources import ReportedDatasource
+from app.schemas.datasources import ReportedCatalog, ReportedDatabase, ReportedDatasource
 from app.services.datasources import sync_from_connector
 
 R = SystemRole
@@ -72,6 +72,32 @@ DEMO_DATABASES: dict[str, list[tuple[str, str, str, bool, str]]] = {
         ("billing", "postgres", "15.8", True, "production"),
     ],
 }
+
+MB = 1024 * 1024
+# What the demo servers hold (name, size, tables), as a 0.3+ connector would report it.
+DEMO_CATALOGS: dict[str, list[tuple[str, int, int | None]]] = {
+    "orders-db": [("orders", 18_400 * MB, 64), ("postgres", 8 * MB, None)],
+    "inventory": [
+        ("inventory", 6_200 * MB, 38),
+        ("warehouse_sync", 1_150 * MB, 12),
+        ("audit_archive", 940 * MB, 4),
+    ],
+    "orders-db-staging": [("orders", 2_100 * MB, 64)],
+    "website-dev": [("wordpress", 320 * MB, 41), ("analytics_dev", 75 * MB, 9)],
+    "billing": [("billing", 4_700 * MB, 27), ("postgres", 8 * MB, None)],
+}
+
+
+def _demo_catalog(name: str) -> ReportedCatalog | None:
+    entries = DEMO_CATALOGS.get(name)
+    if entries is None:
+        return None
+    return ReportedCatalog(
+        databases=[
+            ReportedDatabase(name=db, size_bytes=size, tables=tables)
+            for db, size, tables in entries
+        ]
+    )
 
 
 async def _user(session: AsyncSession, email: str, name: str) -> User:
@@ -171,6 +197,7 @@ async def seed_demo_databases(session: AsyncSession) -> list[str]:
                     version=version,
                     reachable=reachable,
                     environment=environment,
+                    catalog=_demo_catalog(name) if reachable else None,
                 )
                 for name, engine, version, reachable, environment in databases
             ],

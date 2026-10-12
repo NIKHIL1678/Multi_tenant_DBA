@@ -323,3 +323,85 @@ def test_reported_engine_list_matches_db_engines() -> None:
 def test_reported_name_is_validated() -> None:
     with pytest.raises(ValueError, match="letters"):
         rep("bad name; DROP TABLE")
+
+
+# ---- catalog: the databases on each server ---------------------------------------------------
+
+CATALOG = {
+    "databases": [
+        {"name": "zipzy_hrm", "size_bytes": 5_000_000, "tables": 42},
+        {"name": "payments", "size_bytes": 1_000_000, "tables": 7},
+        {"name": "empty_one", "size_bytes": None, "tables": None},
+    ],
+    "truncated": False,
+}
+
+
+async def test_sync_stores_the_catalog_and_api_shows_it(api: AsyncClient, db: AsyncSession) -> None:
+    w = await world(db)
+    c = await enrolled_connector(db, w.t, w.owner)
+    viewer, _ = await member(db, w.t, R.VIEWER)
+    result = await sync_from_connector(
+        db, connector_id=c.id, reported=[rep("main", engine="mysql", catalog=CATALOG)]
+    )
+    ds = result.created[0]
+
+    r = await api.get(url(w.t, f"/{ds.id}"), headers=hdr(viewer))
+    assert r.status_code == 200
+    summary = r.json()["catalog"]
+    assert summary["database_count"] == 3
+    assert summary["total_size_bytes"] == 6_000_000
+    assert summary["truncated"] is False and summary["updated_at"]
+
+    r = await api.get(url(w.t, f"/{ds.id}/databases"), headers=hdr(viewer))
+    assert r.status_code == 200
+    body = r.json()
+    assert body["datasource_id"] == str(ds.id) and body["updated_at"]
+    assert body["databases"][0] == {"name": "zipzy_hrm", "size_bytes": 5_000_000, "tables": 42}
+    assert [d["name"] for d in body["databases"]] == ["zipzy_hrm", "payments", "empty_one"]
+
+
+async def test_unreachable_server_keeps_the_last_catalog(db: AsyncSession) -> None:
+    w = await world(db)
+    c = await enrolled_connector(db, w.t, w.owner)
+    first = await sync_from_connector(db, connector_id=c.id, reported=[rep("a", catalog=CATALOG)])
+    ds = first.created[0]
+    seen_at = ds.catalog_updated_at
+    await sync_from_connector(db, connector_id=c.id, reported=[rep("a", reachable=False)])
+    assert ds.status == DatasourceStatus.ERROR
+    assert ds.catalog == CATALOG and ds.catalog_updated_at == seen_at
+
+
+async def test_old_connector_without_catalog(api: AsyncClient, db: AsyncSession) -> None:
+    w = await world(db)
+    c = await enrolled_connector(db, w.t, w.owner)
+    first = await sync_from_connector(db, connector_id=c.id, reported=[rep("old")])
+    ds = first.created[0]
+    r = await api.get(url(w.t, f"/{ds.id}"), headers=hdr(w.owner))
+    assert r.json()["catalog"] is None
+    r = await api.get(url(w.t, f"/{ds.id}/databases"), headers=hdr(w.owner))
+    assert r.json() == {
+        "datasource_id": str(ds.id),
+        "updated_at": None,
+        "truncated": False,
+        "databases": [],
+    }
+
+
+async def test_catalog_follows_environment_visibility(api: AsyncClient, db: AsyncSession) -> None:
+    w = await world(db)
+    other = await world(db)
+    blind = await make_custom_role(db, w.t, "no-access", set())
+    contractor, m = await member(db, w.t, R.BACKEND_DEV)
+    await override_role(db, m, w.prod, blind.id)  # cannot see production
+    path = f"/{w.pg_prod.id}/databases"
+    assert (await api.get(url(w.t, path), headers=hdr(contractor))).status_code == 404
+    assert (await api.get(url(w.t, path), headers=hdr(other.owner))).status_code == 404
+
+
+def test_reported_catalog_is_bounded() -> None:
+    too_many = {"databases": [{"name": f"d{i}"} for i in range(1001)]}
+    with pytest.raises(ValueError, match="1000"):
+        rep("x", catalog=too_many)
+    with pytest.raises(ValueError):
+        rep("x", catalog={"databases": [{"name": "d", "size_bytes": -1}]})

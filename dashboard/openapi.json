@@ -151,6 +151,79 @@
         "title": "AuditEntryOut",
         "type": "object"
       },
+      "CatalogDatabase": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "tables": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tables"
+          }
+        },
+        "required": [
+          "name",
+          "size_bytes",
+          "tables"
+        ],
+        "title": "CatalogDatabase",
+        "type": "object"
+      },
+      "CatalogSummary": {
+        "properties": {
+          "database_count": {
+            "title": "Database Count",
+            "type": "integer"
+          },
+          "total_size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Size Bytes"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "database_count",
+          "total_size_bytes",
+          "truncated",
+          "updated_at"
+        ],
+        "title": "CatalogSummary",
+        "type": "object"
+      },
       "ConnectorCreateIn": {
         "properties": {
           "name": {
@@ -307,6 +380,46 @@
         "title": "ConnectorUpdateIn",
         "type": "object"
       },
+      "DatasourceCatalogOut": {
+        "properties": {
+          "databases": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogDatabase"
+            },
+            "title": "Databases",
+            "type": "array"
+          },
+          "datasource_id": {
+            "format": "uuid",
+            "title": "Datasource Id",
+            "type": "string"
+          },
+          "truncated": {
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          }
+        },
+        "required": [
+          "datasource_id",
+          "updated_at",
+          "truncated",
+          "databases"
+        ],
+        "title": "DatasourceCatalogOut",
+        "type": "object"
+      },
       "DatasourceMoveIn": {
         "properties": {
           "environment_id": {
@@ -334,6 +447,16 @@
               }
             ],
             "title": "Capabilities"
+          },
+          "catalog": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "connector": {
             "$ref": "#/components/schemas/ConnectorRef"
@@ -395,6 +518,7 @@
           "status",
           "capabilities",
           "last_checked_at",
+          "catalog",
           "connector",
           "environment",
           "created_at"
@@ -3330,6 +3454,92 @@
           }
         },
         "summary": "Check Datasource",
+        "tags": [
+          "datasources"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/databases": {
+      "get": {
+        "description": "The databases on this server as last reported (biggest first). Names and sizes only.",
+        "operationId": "list_server_databases_v1_tenants__tenant_id__datasources__datasource_id__databases_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "datasource_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Datasource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Dev-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dev-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatasourceCatalogOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List Server Databases",
         "tags": [
           "datasources"
         ]

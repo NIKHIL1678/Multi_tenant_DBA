@@ -3,6 +3,7 @@
 GET    /v1/tenants/{tenant_id}/datasources                 filters: environment_id, connector_id,
                                                            engine, status
 GET    /v1/tenants/{tenant_id}/datasources/{datasource_id}
+GET    /v1/tenants/{tenant_id}/datasources/{datasource_id}/databases   every database on that server
 PATCH  /v1/tenants/{tenant_id}/datasources/{datasource_id}  {environment_id}  move
 DELETE /v1/tenants/{tenant_id}/datasources/{datasource_id}
 POST   /v1/tenants/{tenant_id}/datasources/{datasource_id}/check   ask its connector to test it now
@@ -15,7 +16,7 @@ New datasources are not created here: connectors report them (see services.datas
 """
 
 import uuid
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
@@ -30,11 +31,15 @@ from app.gateway.hub import (
     ToolFailedError,
     get_hub,
 )
+from app.models import Datasource
 from app.models.enums import DatasourceStatus, DbEngine
 from app.rbac.catalog import Permission
 from app.rbac.service import AccessContext, environments_with_permission
 from app.schemas.datasources import (
+    CatalogDatabase,
+    CatalogSummary,
     ConnectorRef,
+    DatasourceCatalogOut,
     DatasourceMoveIn,
     DatasourceOut,
     EnvironmentRef,
@@ -46,8 +51,26 @@ router = APIRouter(prefix="/v1/tenants/{tenant_id}/datasources", tags=["datasour
 
 Member = Annotated[AccessContext, Depends(require_member)]
 
-
 CHECK_TIMEOUT_SECONDS = 30
+
+
+def _catalog_entries(raw: dict[str, Any] | None) -> list[CatalogDatabase]:
+    if not raw:
+        return []
+    return [CatalogDatabase.model_validate(d) for d in raw.get("databases", [])]
+
+
+def _summary(d: Datasource) -> CatalogSummary | None:
+    if d.catalog is None or d.catalog_updated_at is None:
+        return None
+    entries = _catalog_entries(d.catalog)
+    sizes = [e.size_bytes for e in entries if e.size_bytes is not None]
+    return CatalogSummary(
+        database_count=len(entries),
+        total_size_bytes=sum(sizes) if sizes else None,
+        truncated=bool(d.catalog.get("truncated", False)),
+        updated_at=d.catalog_updated_at,
+    )
 
 
 def _out(info: svc.DatasourceInfo) -> DatasourceOut:
@@ -60,6 +83,7 @@ def _out(info: svc.DatasourceInfo) -> DatasourceOut:
         status=d.status,
         capabilities=d.capabilities,
         last_checked_at=d.last_checked_at,
+        catalog=_summary(d),
         connector=ConnectorRef(id=c.id, name=c.name, status=c.status),
         environment=EnvironmentRef(id=e.id, name=e.name, is_production=e.is_production),
         created_at=d.created_at,
@@ -127,6 +151,30 @@ async def get_datasource(
     except _RULE_ERRORS as exc:
         raise _translate(exc) from None
     return _out(info)
+
+
+@router.get("/{datasource_id}/databases")
+async def list_server_databases(
+    tenant_id: uuid.UUID,
+    datasource_id: uuid.UUID,
+    _: Member,
+    user: CurrentUser,
+    session: DbSession,
+) -> DatasourceCatalogOut:
+    """The databases on this server as last reported (biggest first). Names and sizes only."""
+    try:
+        info = await svc.get_visible(
+            session, user_id=user.user_id, tenant_id=tenant_id, datasource_id=datasource_id
+        )
+    except _RULE_ERRORS as exc:
+        raise _translate(exc) from None
+    d = info.datasource
+    return DatasourceCatalogOut(
+        datasource_id=d.id,
+        updated_at=d.catalog_updated_at,
+        truncated=bool((d.catalog or {}).get("truncated", False)),
+        databases=_catalog_entries(d.catalog),
+    )
 
 
 @router.patch("/{datasource_id}")

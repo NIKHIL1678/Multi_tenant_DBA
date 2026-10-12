@@ -7,10 +7,11 @@ import { connectorKeys } from '@/features/connectors/api'
 import { environmentKeys } from '@/features/environments/api'
 import { tenantKeys } from '@/features/tenants/api'
 import { api } from '@/lib/api'
-import type { Datasource } from '@/lib/types'
+import type { Datasource, DatasourceCatalog } from '@/lib/types'
 
 export const datasourceKeys = {
   list: (tenantId: string) => ['tenants', tenantId, 'datasources'] as const,
+  databases: (tenantId: string, id: string) => ['tenants', tenantId, 'datasources', id, 'databases'] as const,
 }
 
 /** Production first, then environment name, then database name. */
@@ -64,6 +65,29 @@ export function useDeleteDatasource(tenantId: string) {
     onSuccess: (_, id) => {
       queryClient.setQueryData<Datasource[]>(datasourceKeys.list(tenantId), (list) => list?.filter((d) => d.id !== id))
       refreshCounts(queryClient, tenantId)
+    },
+  })
+}
+
+/** Every database on one server (MySQL schemas, Postgres databases): names and sizes only. */
+export function useServerDatabases(tenantId: string, datasourceId: string | null) {
+  return useQuery({
+    queryKey: datasourceKeys.databases(tenantId, datasourceId ?? ''),
+    queryFn: () => api<DatasourceCatalog>(`/v1/tenants/${tenantId}/datasources/${datasourceId}/databases`),
+    enabled: datasourceId !== null,
+  })
+}
+
+/** Ask the connector to test the server now; this also refreshes its list of databases. */
+export function useCheckDatasource(tenantId: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api<Datasource>(`/v1/tenants/${tenantId}/datasources/${id}/check`, { method: 'POST' }),
+    onSuccess: (ds) => {
+      queryClient.setQueryData<Datasource[]>(datasourceKeys.list(tenantId), (list) =>
+        list?.map((d) => (d.id === ds.id ? ds : d)),
+      )
+      void queryClient.invalidateQueries({ queryKey: datasourceKeys.databases(tenantId, ds.id) })
     },
   })
 }
