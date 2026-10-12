@@ -7,11 +7,13 @@ import { connectorKeys } from '@/features/connectors/api'
 import { environmentKeys } from '@/features/environments/api'
 import { tenantKeys } from '@/features/tenants/api'
 import { api } from '@/lib/api'
-import type { Datasource, DatasourceCatalog } from '@/lib/types'
+import type { Collector, Datasource, DatasourceCatalog, ServerSnapshots } from '@/lib/types'
 
 export const datasourceKeys = {
   list: (tenantId: string) => ['tenants', tenantId, 'datasources'] as const,
+  one: (tenantId: string, id: string) => ['tenants', tenantId, 'datasources', id] as const,
   databases: (tenantId: string, id: string) => ['tenants', tenantId, 'datasources', id, 'databases'] as const,
+  snapshots: (tenantId: string, id: string) => ['tenants', tenantId, 'datasources', id, 'snapshots'] as const,
 }
 
 /** Production first, then environment name, then database name. */
@@ -87,7 +89,41 @@ export function useCheckDatasource(tenantId: string) {
       queryClient.setQueryData<Datasource[]>(datasourceKeys.list(tenantId), (list) =>
         list?.map((d) => (d.id === ds.id ? ds : d)),
       )
+      queryClient.setQueryData(datasourceKeys.one(tenantId, ds.id), ds)
       void queryClient.invalidateQueries({ queryKey: datasourceKeys.databases(tenantId, ds.id) })
     },
+  })
+}
+
+/** One server. Starts from the list (if loaded) so its page opens instantly. */
+export function useDatasource(tenantId: string, id: string) {
+  const queryClient = useQueryClient()
+  return useQuery({
+    queryKey: datasourceKeys.one(tenantId, id),
+    queryFn: () => api<Datasource>(`/v1/tenants/${tenantId}/datasources/${id}`),
+    initialData: () => queryClient.getQueryData<Datasource[]>(datasourceKeys.list(tenantId))?.find((d) => d.id === id),
+    initialDataUpdatedAt: () => queryClient.getQueryState(datasourceKeys.list(tenantId))?.dataUpdatedAt,
+    refetchInterval: 60_000,
+  })
+}
+
+/** The latest health, table and index statistics the connector collected for this server. */
+export function useSnapshots(tenantId: string, id: string) {
+  return useQuery({
+    queryKey: datasourceKeys.snapshots(tenantId, id),
+    queryFn: () => api<ServerSnapshots>(`/v1/tenants/${tenantId}/datasources/${id}/snapshots`),
+  })
+}
+
+/** Ask the connector to collect now. Collectors that ran in the last 30 s are reused. */
+export function useCollect(tenantId: string, id: string) {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (collectors?: Collector[]) =>
+      api<ServerSnapshots>(`/v1/tenants/${tenantId}/datasources/${id}/collect`, {
+        method: 'POST',
+        body: collectors ? { collectors } : undefined,
+      }),
+    onSuccess: (data) => queryClient.setQueryData(datasourceKeys.snapshots(tenantId, id), data),
   })
 }

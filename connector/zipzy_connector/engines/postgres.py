@@ -9,6 +9,7 @@ from zipzy_connector.config import DatabaseConfig
 from zipzy_connector.engines.base import (
     CONNECT_TIMEOUT_S,
     MAX_CATALOG_ENTRIES,
+    STATEMENT_TIMEOUT_MS,
     ProbeResult,
     catalog_of,
     guarded,
@@ -53,23 +54,28 @@ def _ssl(mode: str) -> Any:
     return mode  # asyncpg understands "prefer" and "require"
 
 
+async def connect_postgres(db: DatabaseConfig, password: str) -> Any:
+    """A session that can only read, and whose statements stop after STATEMENT_TIMEOUT_MS."""
+    return await asyncpg.connect(
+        host=db.host,
+        port=db.effective_port,
+        user=db.user,
+        password=password,
+        database=db.database,
+        ssl=_ssl(db.tls),
+        timeout=CONNECT_TIMEOUT_S,
+        # Every statement in this session is read-only, whatever the user's rights are.
+        server_settings={
+            "application_name": "zipzy-connector",
+            "default_transaction_read_only": "on",
+            "statement_timeout": str(STATEMENT_TIMEOUT_MS),
+        },
+    )
+
+
 async def probe_postgres(db: DatabaseConfig) -> ProbeResult:
     async def run(password: str) -> ProbeResult:
-        conn = await asyncpg.connect(
-            host=db.host,
-            port=db.effective_port,
-            user=db.user,
-            password=password,
-            database=db.database,
-            ssl=_ssl(db.tls),
-            timeout=CONNECT_TIMEOUT_S,
-            # Every statement in this session is read-only, whatever the user's rights are.
-            server_settings={
-                "application_name": "zipzy-connector",
-                "default_transaction_read_only": "on",
-                "statement_timeout": "5000",
-            },
-        )
+        conn = await connect_postgres(db, password)
         catalog: dict[str, Any] | None = None
         try:
             row = await conn.fetchrow(_CAPABILITIES_SQL)

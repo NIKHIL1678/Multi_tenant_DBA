@@ -17,6 +17,7 @@ from zipzy_connector.config import ConfigError, DatabaseConfig
 
 CONNECT_TIMEOUT_S = 10
 PROBE_TIMEOUT_S = 20
+STATEMENT_TIMEOUT_MS = 5000  # every query the connector runs stops after this
 # A server can hold thousands of databases; report the biggest ones and say it was cut.
 MAX_CATALOG_ENTRIES = 1000
 

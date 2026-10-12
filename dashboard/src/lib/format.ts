@@ -76,3 +76,35 @@ export function formatBytes(bytes: number): string {
   const digits = unit === 0 || value >= 100 ? 0 : 1
   return `${value.toFixed(digits)} ${BYTE_UNITS[unit]}`
 }
+
+/** 90 -> "2 minutes", 200_000 -> "2 days" (largest whole unit; for uptimes and ages). */
+export function formatDuration(seconds: number): string {
+  const units: [string, number][] = [
+    ['day', 86_400],
+    ['hour', 3_600],
+    ['minute', 60],
+  ]
+  for (const [unit, size] of units) {
+    const n = Math.floor(seconds / size)
+    if (n >= 1) return `${n} ${unit}${n === 1 ? '' : 's'}`
+  }
+  return 'less than a minute'
+}
+
+const countFormat = new Intl.NumberFormat('en-IN')
+const compactFormat = new Intl.NumberFormat('en', { notation: 'compact', maximumFractionDigits: 1 })
+
+/** 1234567 -> "12,34,567" (Indian grouping) */
+export function formatCount(n: number): string {
+  return countFormat.format(n)
+}
+
+/** 1234567 -> "1.2M" (for tight table cells) */
+export function formatCompact(n: number): string {
+  return compactFormat.format(n)
+}
+
+/** 0.9912 -> "99.1%" */
+export function formatPercent(ratio: number): string {
+  return `${(ratio * 100).toFixed(ratio >= 0.999 || ratio === 0 ? 0 : 1)}%`
+}

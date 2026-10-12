@@ -1,6 +1,6 @@
 import { CircleHelp, Database, SearchX } from 'lucide-react'
 import { useMemo, useState } from 'react'
-import { useSearchParams } from 'react-router'
+import { Link, useSearchParams } from 'react-router'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/confirm-dialog'
@@ -254,7 +254,7 @@ export function DatabasesPage() {
                     {filtered.map((d) => (
                       <TableRow key={d.id}>
                         <TableCell className="max-w-72">
-                          <p className="truncate font-mono font-medium">{d.local_name}</p>
+                          <ServerLink datasource={d} />
                           <EngineBadge engine={d.engine} version={d.version} />
                         </TableCell>
                         <TableCell className="whitespace-nowrap text-sm">
@@ -283,7 +283,7 @@ export function DatabasesPage() {
                   <li key={d.id} className="grid gap-2 p-4">
                     <div className="flex items-start gap-2">
                       <div className="min-w-0 flex-1 pt-1">
-                        <p className="truncate font-mono font-medium">{d.local_name}</p>
+                        <ServerLink datasource={d} />
                       </div>
                       <div className="-mr-2">{actionsFor(d)}</div>
                     </div>
@@ -351,6 +351,18 @@ export function DatabasesPage() {
         </>
       )}
     </>
+  )
+}
+
+/** The server name opens its page (health, tables, indexes). */
+function ServerLink({ datasource: d }: { datasource: Datasource }) {
+  return (
+    <Link
+      to={d.id}
+      className="block truncate font-mono font-medium underline-offset-4 outline-none hover:text-link hover:underline focus-visible:underline"
+    >
+      {d.local_name}
+    </Link>
   )
 }
 

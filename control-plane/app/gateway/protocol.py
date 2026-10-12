@@ -27,6 +27,7 @@ from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.enums import Collector
 from app.schemas.connectors import PUBLIC_KEY_PREFIX
 from app.schemas.datasources import ReportedDatasource
 
@@ -39,8 +40,8 @@ IDLE_TIMEOUT_SECONDS = 60  # no frame at all for this long: the link is dead
 MAX_DATABASES = 500
 
 # Tools ZipZy may ask a connector to run. The connector has its own allow-list too; a name has
-# to be on BOTH lists to ever run. Every tool is read-only. (Collectors arrive in 4.3.)
-ALLOWED_TOOLS = frozenset({"probe"})
+# to be on BOTH lists to ever run. Every tool is read-only: `probe` plus the collectors.
+ALLOWED_TOOLS = frozenset({"probe", *(c.value for c in Collector)})
 
 
 class CloseCode:

@@ -359,6 +359,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/collect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Collect Now
+         * @description Ask the connector to run collectors now (those that ran in the last 30 s are reused).
+         */
+        post: operations["collect_now_v1_tenants__tenant_id__datasources__datasource_id__collect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenants/{tenant_id}/datasources/{datasource_id}/databases": {
         parameters: {
             query?: never;
@@ -371,6 +391,23 @@ export interface paths {
          * @description The databases on this server as last reported (biggest first). Names and sizes only.
          */
         get: operations["list_server_databases_v1_tenants__tenant_id__datasources__datasource_id__databases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/snapshots": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest Snapshots */
+        get: operations["latest_snapshots_v1_tenants__tenant_id__datasources__datasource_id__snapshots_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -606,6 +643,43 @@ export interface components {
              */
             updated_at: string;
         };
+        /** CollectError */
+        CollectError: {
+            /** Code */
+            code: string;
+            collector: components["schemas"]["Collector"];
+            /** Message */
+            message: string;
+        };
+        /** CollectIn */
+        CollectIn: {
+            /**
+             * Collectors
+             * @default [
+             *       "health",
+             *       "table_stats",
+             *       "indexes"
+             *     ]
+             */
+            collectors: components["schemas"]["Collector"][];
+        };
+        /**
+         * Collector
+         * @description Read-only questions a connector can answer about a database (connector 0.4.0+).
+         * @enum {string}
+         */
+        Collector: "health" | "table_stats" | "indexes";
+        /** Connections */
+        Connections: {
+            /** Active */
+            active: number | null;
+            /** Current */
+            current: number | null;
+            /** Max */
+            max: number | null;
+            /** Peak */
+            peak: number | null;
+        };
         /** ConnectorCreateIn */
         ConnectorCreateIn: {
             /** Name */
@@ -722,6 +796,21 @@ export interface components {
          * @enum {string}
          */
         DbEngine: "postgres" | "mysql" | "mariadb" | "mongodb" | "mssql";
+        /** DuplicateIndex */
+        DuplicateIndex: {
+            /** Columns */
+            columns: string[];
+            /** Covered By */
+            covered_by: string;
+            /** Index */
+            index: string;
+            /** Schema */
+            schema: string;
+            /** Size Bytes */
+            size_bytes: number | null;
+            /** Table */
+            table: string;
+        };
         /** EnrollIn */
         EnrollIn: {
             /** Public Key */
@@ -823,10 +912,141 @@ export interface components {
             /** Name */
             name?: string | null;
         };
+        /** FullScan */
+        FullScan: {
+            /** Full Scans */
+            full_scans: number | null;
+            /** Rows */
+            rows: number | null;
+            /** Rows Read Without Index */
+            rows_read_without_index: number | null;
+            /** Schema */
+            schema: string;
+            /** Table */
+            table: string;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /** HealthData */
+        HealthData: {
+            /** Cache Hit Ratio */
+            cache_hit_ratio: number | null;
+            /** @default {} */
+            connections: components["schemas"]["Connections"];
+            /** Deadlocks */
+            deadlocks: number | null;
+            /** @default {} */
+            replication: components["schemas"]["Replication"];
+            /**
+             * Settings
+             * @default {}
+             */
+            settings: {
+                [key: string]: string;
+            };
+            /** Slow Queries */
+            slow_queries: number | null;
+            /** Temp Tables On Disk Ratio */
+            temp_tables_on_disk_ratio: number | null;
+            /** Throughput Per Second */
+            throughput_per_second: number | null;
+            /**
+             * Throughput Unit
+             * @default queries
+             */
+            throughput_unit: string;
+            /** Uptime Seconds */
+            uptime_seconds: number | null;
+        };
+        /** HealthSnapshot */
+        HealthSnapshot: {
+            /**
+             * Collected At
+             * Format: date-time
+             */
+            collected_at: string;
+            data: components["schemas"]["HealthData"];
+        };
+        /** IndexRow */
+        IndexRow: {
+            /** Columns */
+            columns: string[];
+            /**
+             * Expression
+             * @default false
+             */
+            expression: boolean;
+            /** Name */
+            name: string;
+            /**
+             * Partial
+             * @default false
+             */
+            partial: boolean;
+            /** Primary */
+            primary: boolean;
+            /** Scans */
+            scans: number | null;
+            /** Schema */
+            schema: string;
+            /** Size Bytes */
+            size_bytes: number | null;
+            /** Table */
+            table: string;
+            /** Unique */
+            unique: boolean;
+            /**
+             * Valid
+             * @default true
+             */
+            valid: boolean;
+        };
+        /** IndexesData */
+        IndexesData: {
+            /** Duplicates */
+            duplicates: components["schemas"]["DuplicateIndex"][];
+            /** Full Scans */
+            full_scans: components["schemas"]["FullScan"][];
+            /** Indexes */
+            indexes: components["schemas"]["IndexRow"][];
+            /** Invalid */
+            invalid: components["schemas"]["InvalidIndex"][];
+            /** Missing Primary Keys */
+            missing_primary_keys: components["schemas"]["MissingPrimaryKey"][];
+            /** Total Indexes */
+            total_indexes: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+            /** Unindexed Foreign Keys */
+            unindexed_foreign_keys: components["schemas"]["UnindexedForeignKey"][];
+            /** Unused */
+            unused: components["schemas"]["UnusedIndex"][];
+            /** Usage Since */
+            usage_since: string | null;
+        };
+        /** IndexesSnapshot */
+        IndexesSnapshot: {
+            /**
+             * Collected At
+             * Format: date-time
+             */
+            collected_at: string;
+            data: components["schemas"]["IndexesData"];
+        };
+        /** InvalidIndex */
+        InvalidIndex: {
+            /** Index */
+            index: string;
+            /** Schema */
+            schema: string;
+            /** Table */
+            table: string;
         };
         /** InvitationAcceptedOut */
         InvitationAcceptedOut: {
@@ -993,12 +1213,28 @@ export interface components {
             /** Tenant Slug */
             tenant_slug: string;
         };
+        /** MissingPrimaryKey */
+        MissingPrimaryKey: {
+            /** Rows */
+            rows: number | null;
+            /** Schema */
+            schema: string;
+            /** Table */
+            table: string;
+        };
         /** Page[AuditEntryOut] */
         Page_AuditEntryOut_: {
             /** Items */
             items: components["schemas"]["AuditEntryOut"][];
             /** Next Cursor */
             next_cursor: string | null;
+        };
+        /** Replication */
+        Replication: {
+            /** Is Replica */
+            is_replica: boolean | null;
+            /** Lag Seconds */
+            lag_seconds: number | null;
         };
         /** RoleOut */
         RoleOut: {
@@ -1028,6 +1264,25 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * ServerSnapshotsOut
+         * @description The latest answer of each collector for one datasource (None: never collected).
+         */
+        ServerSnapshotsOut: {
+            /**
+             * Datasource Id
+             * Format: uuid
+             */
+            datasource_id: string;
+            /**
+             * Errors
+             * @default []
+             */
+            errors: components["schemas"]["CollectError"][];
+            health: components["schemas"]["HealthSnapshot"] | null;
+            indexes: components["schemas"]["IndexesSnapshot"] | null;
+            table_stats: components["schemas"]["TableStatsSnapshot"] | null;
+        };
         /** SignupIn */
         SignupIn: {
             /**
@@ -1039,6 +1294,52 @@ export interface components {
             full_name: string;
             /** Password */
             password: string;
+        };
+        /** TableRow */
+        TableRow: {
+            /** Data Bytes */
+            data_bytes: number | null;
+            /** Dead Rows */
+            dead_rows: number | null;
+            /** Engine */
+            engine: string | null;
+            /** Free Bytes */
+            free_bytes: number | null;
+            /** Has Primary Key */
+            has_primary_key: boolean;
+            /** Index Bytes */
+            index_bytes: number | null;
+            /** Index Scans */
+            index_scans: number | null;
+            /** Name */
+            name: string;
+            /** Rows */
+            rows: number | null;
+            /** Schema */
+            schema: string;
+            /** Seq Scans */
+            seq_scans: number | null;
+        };
+        /** TableStatsData */
+        TableStatsData: {
+            /** Tables */
+            tables: components["schemas"]["TableRow"][];
+            /** Total Tables */
+            total_tables: number;
+            /**
+             * Truncated
+             * @default false
+             */
+            truncated: boolean;
+        };
+        /** TableStatsSnapshot */
+        TableStatsSnapshot: {
+            /**
+             * Collected At
+             * Format: date-time
+             */
+            collected_at: string;
+            data: components["schemas"]["TableStatsData"];
         };
         /** TenantCreateIn */
         TenantCreateIn: {
@@ -1109,6 +1410,32 @@ export interface components {
              * @constant
              */
             token_type: "bearer";
+        };
+        /** UnindexedForeignKey */
+        UnindexedForeignKey: {
+            /** Columns */
+            columns: string[];
+            /** Constraint */
+            constraint: string;
+            /** References */
+            references: string;
+            /** Schema */
+            schema: string;
+            /** Table */
+            table: string;
+        };
+        /** UnusedIndex */
+        UnusedIndex: {
+            /** Columns */
+            columns: string[];
+            /** Index */
+            index: string;
+            /** Schema */
+            schema: string;
+            /** Size Bytes */
+            size_bytes: number | null;
+            /** Table */
+            table: string;
         };
         /** ValidationError */
         ValidationError: {
@@ -2017,6 +2344,45 @@ export interface operations {
             };
         };
     };
+    collect_now_v1_tenants__tenant_id__datasources__datasource_id__collect_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                datasource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["CollectIn"] | null;
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerSnapshotsOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_server_databases_v1_tenants__tenant_id__datasources__datasource_id__databases_get: {
         parameters: {
             query?: never;
@@ -2039,6 +2405,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasourceCatalogOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    latest_snapshots_v1_tenants__tenant_id__datasources__datasource_id__snapshots_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                datasource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ServerSnapshotsOut"];
                 };
             };
             /** @description Validation Error */

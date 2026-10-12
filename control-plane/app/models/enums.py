@@ -15,8 +15,8 @@ class TenantStatus(StrEnum):
 
 
 class AuthProvider(StrEnum):
-    GOOGLE = "google"
     PASSWORD = "password"  # noqa: S105 - enum label, not a secret
+    GOOGLE = "google"
 
 
 class UserStatus(StrEnum):
@@ -42,6 +42,14 @@ class DbEngine(StrEnum):
     MARIADB = "mariadb"
     MONGODB = "mongodb"
     MSSQL = "mssql"
+
+
+class Collector(StrEnum):
+    """Read-only questions a connector can answer about a database (connector 0.4.0+)."""
+
+    HEALTH = "health"
+    TABLE_STATS = "table_stats"
+    INDEXES = "indexes"
 
 
 class DatasourceStatus(StrEnum):

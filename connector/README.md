@@ -15,7 +15,22 @@ Database passwords never leave the server it runs on.
 3. **Stay connected.** It opens ONE outbound WebSocket to ZipZy, signs a fresh challenge with
    its key, and reports its databases (they appear in ZipZy by themselves). It answers ZipZy's
    pings, re-checks every database every 5 minutes, and runs **allow-listed, read-only tools**
-   on request (today: `probe`). Nothing can make it run SQL sent from outside.
+   on request. Nothing can make it run SQL sent from outside.
+
+## Tools ZipZy may ask for
+
+Each is a fixed, read-only set of queries with a 5 s limit per statement and 30 s overall. None
+reads table rows; at most a few hundred items come back.
+
+| Tool | Answers | Reads |
+|---|---|---|
+| `probe` | reachable? version, capabilities, databases on the server | version, grants, catalog |
+| `health` | is the server OK? connections, cache hit rate, replication lag | server status counters, a few settings |
+| `table_stats` | biggest tables: rows, data and index size, scans, primary key | table statistics |
+| `indexes` | unused, duplicate and missing indexes; tables without a primary key; heavy full scans | index definitions and usage counters |
+
+Usage counters start again when the database server restarts, so "unused" means "not used since
+then". On Postgres, table and index details cover the database named in `connector.yaml`.
 4. **Reconnect** by itself after network trouble or a ZipZy restart (1 s → 60 s pauses). It stops
    only when the connector is **revoked** in ZipZy or its key is refused (exit code 2).
 

@@ -10,6 +10,7 @@ from zipzy_connector.config import DatabaseConfig
 from zipzy_connector.engines.base import (
     CONNECT_TIMEOUT_S,
     MAX_CATALOG_ENTRIES,
+    STATEMENT_TIMEOUT_MS,
     ProbeResult,
     catalog_of,
     guarded,
@@ -73,23 +74,40 @@ def _ssl(mode: str) -> ssl_lib.SSLContext | None:
     return ctx
 
 
+async def connect_mysql(db: DatabaseConfig, password: str) -> Any:
+    """A session that can only read, and whose statements stop after STATEMENT_TIMEOUT_MS."""
+    conn = await aiomysql.connect(
+        host=db.host,
+        port=db.effective_port,
+        user=db.user,
+        password=password,
+        db=db.database,
+        ssl=_ssl(db.tls),
+        connect_timeout=CONNECT_TIMEOUT_S,
+        autocommit=True,
+    )
+    try:
+        async with conn.cursor() as cur:
+            # Every statement in this session is read-only, whatever the user's rights are.
+            await cur.execute("SET SESSION TRANSACTION READ ONLY")
+            try:  # MySQL (milliseconds, SELECTs)
+                await cur.execute(f"SET SESSION MAX_EXECUTION_TIME = {STATEMENT_TIMEOUT_MS}")
+            except aiomysql.Error:  # MariaDB (seconds)
+                await cur.execute(
+                    f"SET SESSION max_statement_time = {STATEMENT_TIMEOUT_MS // 1000}"
+                )
+    except BaseException:
+        conn.close()
+        raise
+    return conn
+
+
 async def probe_mysql(db: DatabaseConfig) -> ProbeResult:
     async def run(password: str) -> ProbeResult:
-        conn = await aiomysql.connect(
-            host=db.host,
-            port=db.effective_port,
-            user=db.user,
-            password=password,
-            db=db.database,
-            ssl=_ssl(db.tls),
-            connect_timeout=CONNECT_TIMEOUT_S,
-            autocommit=True,
-        )
+        conn = await connect_mysql(db, password)
         catalog: dict[str, Any] | None = None
         try:
             async with conn.cursor() as cur:
-                # Every statement in this session is read-only, whatever the user's rights are.
-                await cur.execute("SET SESSION TRANSACTION READ ONLY")
                 await cur.execute("SELECT VERSION(), @@performance_schema")
                 version_raw, perf_schema = await cur.fetchone()
                 await cur.execute("SHOW GRANTS FOR CURRENT_USER()")

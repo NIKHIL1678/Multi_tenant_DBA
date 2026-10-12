@@ -20,7 +20,10 @@ const MYSQL_GRANT = `GRANT SHOW DATABASES, SHOW VIEW
 const SEARCH_FROM = 8 // show a search box once the list is longer than this
 
 /** MySQL / MariaDB monitoring users need two extra grants to see databases and their sizes. */
-function missingGrants(d: Datasource): { cannotList: boolean; noSizes: boolean } {
+function missingGrants(d: Datasource): {
+  cannotList: boolean
+  noSizes: boolean
+} {
   const caps = d.capabilities ?? {}
   const isMysql = d.engine === 'mysql' || d.engine === 'mariadb'
   return {
@@ -101,15 +104,6 @@ function Body({
 }) {
   const now = useNow()
   const catalog = useServerDatabases(tenantId, d.id)
-  const [search, setSearch] = useState('')
-
-  const databases = useMemo(() => catalog.data?.databases ?? [], [catalog.data])
-  const shown = useMemo(() => {
-    const q = search.trim().toLowerCase()
-    return q ? databases.filter((db) => db.name.toLowerCase().includes(q)) : databases
-  }, [databases, search])
-
-  const { cannotList, noSizes } = missingGrants(d)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -132,71 +126,7 @@ function Body({
       </header>
 
       <div className="grid min-h-0 flex-1 content-start gap-3 overflow-y-auto p-4">
-        {(cannotList || noSizes) && (
-          <div className="grid gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
-            <p className="flex items-start gap-2">
-              <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
-              <span>
-                {cannotList
-                  ? 'The monitoring user cannot see the databases on this server.'
-                  : 'The monitoring user cannot see table sizes.'}{' '}
-                Run this on the server as an admin. It shows names and sizes only, never rows:
-              </span>
-            </p>
-            <CodeBlock code={MYSQL_GRANT} label="Grant for the monitoring user" />
-            <p className="text-xs text-muted-foreground">
-              Use your monitoring user’s name. If it also exists as{' '}
-              <code className="font-mono">'zipzy_monitor'@'localhost'</code>, run it for that one too. The list updates at
-              the next check.
-            </p>
-          </div>
-        )}
-
-        {catalog.isError ? (
-          <QueryError error={catalog.error} />
-        ) : catalog.isLoading ? (
-          <div className="grid gap-2" aria-busy aria-label="Loading databases">
-            {[0, 1, 2].map((i) => (
-              <Skeleton key={i} className="h-12" />
-            ))}
-          </div>
-        ) : databases.length === 0 && cannotList ? null : databases.length === 0 ? (
-          <div className="grid justify-items-center gap-2 py-10 text-center">
-            <Database className="size-8 text-muted-foreground" aria-hidden />
-            <p className="text-sm font-medium">
-              {catalog.data?.updated_at ? 'No databases found' : 'No list of databases yet'}
-            </p>
-            <p className="max-w-xs text-sm text-muted-foreground">
-              {catalog.data?.updated_at
-                ? 'The server reported no databases besides its system ones.'
-                : 'It appears after the next check. Connectors older than version 0.3.0 do not send it: update the connector.'}
-            </p>
-          </div>
-        ) : (
-          <>
-            {databases.length > SEARCH_FROM && (
-              <SearchInput
-                value={search}
-                onValueChange={setSearch}
-                placeholder="Search databases"
-                aria-label="Search databases on this server"
-              />
-            )}
-            <ul className="divide-y rounded-lg border" aria-label={`Databases on ${d.local_name}`}>
-              {shown.map((db) => (
-                <DatabaseRow key={db.name} db={db} />
-              ))}
-              {shown.length === 0 && <li className="p-3 text-sm text-muted-foreground">No database matches.</li>}
-            </ul>
-            <p className="text-xs text-muted-foreground">
-              {catalog.data?.truncated
-                ? `Showing the ${databases.length} biggest; the server has more.`
-                : `${databases.length} ${databases.length === 1 ? 'database' : 'databases'}, biggest first. System databases are left out.`}{' '}
-              Sizes are the server’s own estimates.
-              {d.engine === 'postgres' && ' Table counts are shown for the database the connector logs in to.'}
-            </p>
-          </>
-        )}
+        <ServerDatabaseList tenantId={tenantId} datasource={d} />
       </div>
     </div>
   )
@@ -220,5 +150,89 @@ function DatabaseRow({ db }: { db: CatalogDatabase }) {
         {db.size_bytes !== null ? formatBytes(db.size_bytes) : '—'}
       </span>
     </li>
+  )
+}
+
+/** Every database on one server, biggest first, with a hint when the monitoring user needs grants. */
+export function ServerDatabaseList({ tenantId, datasource: d }: { tenantId: string; datasource: Datasource }) {
+  const catalog = useServerDatabases(tenantId, d.id)
+  const [search, setSearch] = useState('')
+
+  const databases = useMemo(() => catalog.data?.databases ?? [], [catalog.data])
+  const shown = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    return q ? databases.filter((db) => db.name.toLowerCase().includes(q)) : databases
+  }, [databases, search])
+
+  const { cannotList, noSizes } = missingGrants(d)
+
+  return (
+    <>
+      {(cannotList || noSizes) && (
+        <div className="grid gap-2 rounded-lg border bg-muted/40 p-3 text-sm">
+          <p className="flex items-start gap-2">
+            <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+            <span>
+              {cannotList
+                ? 'The monitoring user cannot see the databases on this server.'
+                : 'The monitoring user cannot see table sizes.'}{' '}
+              Run this on the server as an admin. It shows names and sizes only, never rows:
+            </span>
+          </p>
+          <CodeBlock code={MYSQL_GRANT} label="Grant for the monitoring user" />
+          <p className="text-xs text-muted-foreground">
+            Use your monitoring user’s name. If it also exists as{' '}
+            <code className="font-mono">'zipzy_monitor'@'localhost'</code>, run it for that one too. The list updates at
+            the next check.
+          </p>
+        </div>
+      )}
+
+      {catalog.isError ? (
+        <QueryError error={catalog.error} />
+      ) : catalog.isLoading ? (
+        <div className="grid gap-2" aria-busy aria-label="Loading databases">
+          {[0, 1, 2].map((i) => (
+            <Skeleton key={i} className="h-12" />
+          ))}
+        </div>
+      ) : databases.length === 0 && cannotList ? null : databases.length === 0 ? (
+        <div className="grid justify-items-center gap-2 py-10 text-center">
+          <Database className="size-8 text-muted-foreground" aria-hidden />
+          <p className="text-sm font-medium">
+            {catalog.data?.updated_at ? 'No databases found' : 'No list of databases yet'}
+          </p>
+          <p className="max-w-xs text-sm text-muted-foreground">
+            {catalog.data?.updated_at
+              ? 'The server reported no databases besides its system ones.'
+              : 'It appears after the next check. Connectors older than version 0.3.0 do not send it: update the connector.'}
+          </p>
+        </div>
+      ) : (
+        <>
+          {databases.length > SEARCH_FROM && (
+            <SearchInput
+              value={search}
+              onValueChange={setSearch}
+              placeholder="Search databases"
+              aria-label="Search databases on this server"
+            />
+          )}
+          <ul className="divide-y rounded-lg border" aria-label={`Databases on ${d.local_name}`}>
+            {shown.map((db) => (
+              <DatabaseRow key={db.name} db={db} />
+            ))}
+            {shown.length === 0 && <li className="p-3 text-sm text-muted-foreground">No database matches.</li>}
+          </ul>
+          <p className="text-xs text-muted-foreground">
+            {catalog.data?.truncated
+              ? `Showing the ${databases.length} biggest; the server has more.`
+              : `${databases.length} ${databases.length === 1 ? 'database' : 'databases'}, biggest first. System databases are left out.`}{' '}
+            Sizes are the server’s own estimates.
+            {d.engine === 'postgres' && ' Table counts are shown for the database the connector logs in to.'}
+          </p>
+        </>
+      )}
+    </>
   )
 }

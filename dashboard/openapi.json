@@ -224,6 +224,118 @@
         "title": "CatalogSummary",
         "type": "object"
       },
+      "CollectError": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "collector": {
+            "$ref": "#/components/schemas/Collector"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          }
+        },
+        "required": [
+          "collector",
+          "code",
+          "message"
+        ],
+        "title": "CollectError",
+        "type": "object"
+      },
+      "CollectIn": {
+        "properties": {
+          "collectors": {
+            "default": [
+              "health",
+              "table_stats",
+              "indexes"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/Collector"
+            },
+            "maxItems": 3,
+            "minItems": 1,
+            "title": "Collectors",
+            "type": "array"
+          }
+        },
+        "title": "CollectIn",
+        "type": "object"
+      },
+      "Collector": {
+        "description": "Read-only questions a connector can answer about a database (connector 0.4.0+).",
+        "enum": [
+          "health",
+          "table_stats",
+          "indexes"
+        ],
+        "title": "Collector",
+        "type": "string"
+      },
+      "Connections": {
+        "properties": {
+          "active": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          },
+          "current": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current"
+          },
+          "max": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max"
+          },
+          "peak": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak"
+          }
+        },
+        "required": [
+          "current",
+          "active",
+          "max",
+          "peak"
+        ],
+        "title": "Connections",
+        "type": "object"
+      },
       "ConnectorCreateIn": {
         "properties": {
           "name": {
@@ -546,6 +658,65 @@
         "title": "DbEngine",
         "type": "string"
       },
+      "DuplicateIndex": {
+        "properties": {
+          "columns": {
+            "items": {
+              "maxLength": 200,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Columns",
+            "type": "array"
+          },
+          "covered_by": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Covered By",
+            "type": "string"
+          },
+          "index": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Index",
+            "type": "string"
+          },
+          "schema": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "table": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "table",
+          "index",
+          "columns",
+          "covered_by",
+          "size_bytes"
+        ],
+        "title": "DuplicateIndex",
+        "type": "object"
+      },
       "EnrollIn": {
         "properties": {
           "public_key": {
@@ -770,6 +941,67 @@
         "title": "EnvironmentUpdateIn",
         "type": "object"
       },
+      "FullScan": {
+        "properties": {
+          "full_scans": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Full Scans"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "rows_read_without_index": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Read Without Index"
+          },
+          "schema": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          },
+          "table": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "table",
+          "rows",
+          "full_scans",
+          "rows_read_without_index"
+        ],
+        "title": "FullScan",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -781,6 +1013,375 @@
           }
         },
         "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthData": {
+        "properties": {
+          "cache_hit_ratio": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Hit Ratio"
+          },
+          "connections": {
+            "$ref": "#/components/schemas/Connections",
+            "default": {}
+          },
+          "deadlocks": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deadlocks"
+          },
+          "replication": {
+            "$ref": "#/components/schemas/Replication",
+            "default": {}
+          },
+          "settings": {
+            "additionalProperties": {
+              "maxLength": 200,
+              "type": "string"
+            },
+            "default": {},
+            "maxProperties": 50,
+            "title": "Settings",
+            "type": "object"
+          },
+          "slow_queries": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Slow Queries"
+          },
+          "temp_tables_on_disk_ratio": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Temp Tables On Disk Ratio"
+          },
+          "throughput_per_second": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Throughput Per Second"
+          },
+          "throughput_unit": {
+            "default": "queries",
+            "title": "Throughput Unit",
+            "type": "string"
+          },
+          "uptime_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Uptime Seconds"
+          }
+        },
+        "required": [
+          "uptime_seconds",
+          "connections",
+          "cache_hit_ratio",
+          "throughput_per_second",
+          "throughput_unit",
+          "deadlocks",
+          "slow_queries",
+          "temp_tables_on_disk_ratio",
+          "replication",
+          "settings"
+        ],
+        "title": "HealthData",
+        "type": "object"
+      },
+      "HealthSnapshot": {
+        "properties": {
+          "collected_at": {
+            "format": "date-time",
+            "title": "Collected At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/HealthData"
+          }
+        },
+        "required": [
+          "collected_at",
+          "data"
+        ],
+        "title": "HealthSnapshot",
+        "type": "object"
+      },
+      "IndexRow": {
+        "properties": {
+          "columns": {
+            "items": {
+              "maxLength": 200,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Columns",
+            "type": "array"
+          },
+          "expression": {
+            "default": false,
+            "title": "Expression",
+            "type": "boolean"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "partial": {
+            "default": false,
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "primary": {
+            "title": "Primary",
+            "type": "boolean"
+          },
+          "scans": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scans"
+          },
+          "schema": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "table": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          },
+          "unique": {
+            "title": "Unique",
+            "type": "boolean"
+          },
+          "valid": {
+            "default": true,
+            "title": "Valid",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "schema",
+          "table",
+          "name",
+          "columns",
+          "unique",
+          "primary",
+          "size_bytes",
+          "scans",
+          "valid",
+          "partial",
+          "expression"
+        ],
+        "title": "IndexRow",
+        "type": "object"
+      },
+      "IndexesData": {
+        "properties": {
+          "duplicates": {
+            "items": {
+              "$ref": "#/components/schemas/DuplicateIndex"
+            },
+            "maxItems": 200,
+            "title": "Duplicates",
+            "type": "array"
+          },
+          "full_scans": {
+            "items": {
+              "$ref": "#/components/schemas/FullScan"
+            },
+            "maxItems": 200,
+            "title": "Full Scans",
+            "type": "array"
+          },
+          "indexes": {
+            "items": {
+              "$ref": "#/components/schemas/IndexRow"
+            },
+            "maxItems": 1000,
+            "title": "Indexes",
+            "type": "array"
+          },
+          "invalid": {
+            "items": {
+              "$ref": "#/components/schemas/InvalidIndex"
+            },
+            "maxItems": 200,
+            "title": "Invalid",
+            "type": "array"
+          },
+          "missing_primary_keys": {
+            "items": {
+              "$ref": "#/components/schemas/MissingPrimaryKey"
+            },
+            "maxItems": 200,
+            "title": "Missing Primary Keys",
+            "type": "array"
+          },
+          "total_indexes": {
+            "minimum": 0.0,
+            "title": "Total Indexes",
+            "type": "integer"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          },
+          "unindexed_foreign_keys": {
+            "items": {
+              "$ref": "#/components/schemas/UnindexedForeignKey"
+            },
+            "maxItems": 200,
+            "title": "Unindexed Foreign Keys",
+            "type": "array"
+          },
+          "unused": {
+            "items": {
+              "$ref": "#/components/schemas/UnusedIndex"
+            },
+            "maxItems": 200,
+            "title": "Unused",
+            "type": "array"
+          },
+          "usage_since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage Since"
+          }
+        },
+        "required": [
+          "usage_since",
+          "total_indexes",
+          "truncated",
+          "indexes",
+          "unused",
+          "duplicates",
+          "unindexed_foreign_keys",
+          "missing_primary_keys",
+          "full_scans",
+          "invalid"
+        ],
+        "title": "IndexesData",
+        "type": "object"
+      },
+      "IndexesSnapshot": {
+        "properties": {
+          "collected_at": {
+            "format": "date-time",
+            "title": "Collected At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/IndexesData"
+          }
+        },
+        "required": [
+          "collected_at",
+          "data"
+        ],
+        "title": "IndexesSnapshot",
+        "type": "object"
+      },
+      "InvalidIndex": {
+        "properties": {
+          "index": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Index",
+            "type": "string"
+          },
+          "schema": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          },
+          "table": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "table",
+          "index"
+        ],
+        "title": "InvalidIndex",
         "type": "object"
       },
       "InvitationAcceptedOut": {
@@ -1170,6 +1771,41 @@
         "title": "MembershipOut",
         "type": "object"
       },
+      "MissingPrimaryKey": {
+        "properties": {
+          "rows": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "schema": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          },
+          "table": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "table",
+          "rows"
+        ],
+        "title": "MissingPrimaryKey",
+        "type": "object"
+      },
       "Page_AuditEntryOut_": {
         "properties": {
           "items": {
@@ -1196,6 +1832,38 @@
           "next_cursor"
         ],
         "title": "Page[AuditEntryOut]",
+        "type": "object"
+      },
+      "Replication": {
+        "properties": {
+          "is_replica": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Replica"
+          },
+          "lag_seconds": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lag Seconds"
+          }
+        },
+        "required": [
+          "is_replica",
+          "lag_seconds"
+        ],
+        "title": "Replication",
         "type": "object"
       },
       "RoleOut": {
@@ -1259,6 +1927,63 @@
         "title": "RoleRef",
         "type": "object"
       },
+      "ServerSnapshotsOut": {
+        "description": "The latest answer of each collector for one datasource (None: never collected).",
+        "properties": {
+          "datasource_id": {
+            "format": "uuid",
+            "title": "Datasource Id",
+            "type": "string"
+          },
+          "errors": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/CollectError"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "health": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/HealthSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "indexes": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/IndexesSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "table_stats": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TableStatsSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "datasource_id",
+          "health",
+          "table_stats",
+          "indexes",
+          "errors"
+        ],
+        "title": "ServerSnapshotsOut",
+        "type": "object"
+      },
       "SignupIn": {
         "properties": {
           "email": {
@@ -1285,6 +2010,183 @@
           "full_name"
         ],
         "title": "SignupIn",
+        "type": "object"
+      },
+      "TableRow": {
+        "properties": {
+          "data_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Bytes"
+          },
+          "dead_rows": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Dead Rows"
+          },
+          "engine": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine"
+          },
+          "free_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Free Bytes"
+          },
+          "has_primary_key": {
+            "title": "Has Primary Key",
+            "type": "boolean"
+          },
+          "index_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Bytes"
+          },
+          "index_scans": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index Scans"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "rows": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows"
+          },
+          "schema": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          },
+          "seq_scans": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seq Scans"
+          }
+        },
+        "required": [
+          "schema",
+          "name",
+          "engine",
+          "rows",
+          "data_bytes",
+          "index_bytes",
+          "free_bytes",
+          "dead_rows",
+          "has_primary_key",
+          "seq_scans",
+          "index_scans"
+        ],
+        "title": "TableRow",
+        "type": "object"
+      },
+      "TableStatsData": {
+        "properties": {
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/TableRow"
+            },
+            "maxItems": 1000,
+            "title": "Tables",
+            "type": "array"
+          },
+          "total_tables": {
+            "minimum": 0.0,
+            "title": "Total Tables",
+            "type": "integer"
+          },
+          "truncated": {
+            "default": false,
+            "title": "Truncated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "total_tables",
+          "truncated",
+          "tables"
+        ],
+        "title": "TableStatsData",
+        "type": "object"
+      },
+      "TableStatsSnapshot": {
+        "properties": {
+          "collected_at": {
+            "format": "date-time",
+            "title": "Collected At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/TableStatsData"
+          }
+        },
+        "required": [
+          "collected_at",
+          "data"
+        ],
+        "title": "TableStatsSnapshot",
         "type": "object"
       },
       "TenantCreateIn": {
@@ -1445,6 +2347,104 @@
           "expires_in"
         ],
         "title": "TokenOut",
+        "type": "object"
+      },
+      "UnindexedForeignKey": {
+        "properties": {
+          "columns": {
+            "items": {
+              "maxLength": 200,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Columns",
+            "type": "array"
+          },
+          "constraint": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Constraint",
+            "type": "string"
+          },
+          "references": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "References",
+            "type": "string"
+          },
+          "schema": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          },
+          "table": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "table",
+          "constraint",
+          "columns",
+          "references"
+        ],
+        "title": "UnindexedForeignKey",
+        "type": "object"
+      },
+      "UnusedIndex": {
+        "properties": {
+          "columns": {
+            "items": {
+              "maxLength": 200,
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Columns",
+            "type": "array"
+          },
+          "index": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Index",
+            "type": "string"
+          },
+          "schema": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Schema",
+            "type": "string"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "table": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Table",
+            "type": "string"
+          }
+        },
+        "required": [
+          "schema",
+          "table",
+          "index",
+          "columns",
+          "size_bytes"
+        ],
+        "title": "UnusedIndex",
         "type": "object"
       },
       "ValidationError": {
@@ -3459,6 +4459,109 @@
         ]
       }
     },
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/collect": {
+      "post": {
+        "description": "Ask the connector to run collectors now (those that ran in the last 30 s are reused).",
+        "operationId": "collect_now_v1_tenants__tenant_id__datasources__datasource_id__collect_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "datasource_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Datasource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Dev-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dev-User"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/CollectIn"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerSnapshotsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Collect Now",
+        "tags": [
+          "collectors"
+        ]
+      }
+    },
     "/v1/tenants/{tenant_id}/datasources/{datasource_id}/databases": {
       "get": {
         "description": "The databases on this server as last reported (biggest first). Names and sizes only.",
@@ -3542,6 +4645,91 @@
         "summary": "List Server Databases",
         "tags": [
           "datasources"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/snapshots": {
+      "get": {
+        "operationId": "latest_snapshots_v1_tenants__tenant_id__datasources__datasource_id__snapshots_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "datasource_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Datasource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Dev-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dev-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ServerSnapshotsOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest Snapshots",
+        "tags": [
+          "collectors"
         ]
       }
     },
