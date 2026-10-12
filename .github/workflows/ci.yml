@@ -85,3 +85,91 @@ jobs:
 
       - run: npm run lint
       - run: npm run build
+
+    connector:
+      runs-on: ubuntu-latest
+      timeout-minutes: 15
+      defaults:
+        run:
+          working-directory: connector
+
+      services:
+        postgres:
+          image: postgres:16
+          env:
+            POSTGRES_USER: zipzy_admin
+            POSTGRES_PASSWORD: admin-pass-123
+            POSTGRES_DB: shop_test
+          ports:
+            - 5432:5432
+          options: >-
+            --health-cmd "pg_isready -U zipzy_admin -d shop_test"
+            --health-interval 5s
+            --health-timeout 5s
+            --health-retries 10
+        mysql:
+          image: mysql:8.0
+          env:
+            MYSQL_ROOT_PASSWORD: root-pass-123
+          ports:
+            - 3306:3306
+          options: >-
+            --health-cmd "mysqladmin ping -h 127.0.0.1 -proot-pass-123"
+            --health-interval 5s
+            --health-timeout 5s
+            --health-retries 20
+
+    env:
+      TEST_PG_HOST: 127.0.0.1
+      TEST_PG_DB: shop_test
+      TEST_PG_MONITOR_USER: zipzy_monitor
+      TEST_PG_MONITOR_PASSWORD: monitor-pass-123
+      TEST_PG_ADMIN_USER: zipzy_admin
+      TEST_PG_ADMIN_PASSWORD: admin-pass-123
+      TEST_MYSQL_HOST: 127.0.0.1
+      TEST_MYSQL_MONITOR_USER: zipzy_monitor
+      TEST_MYSQL_MONITOR_PASSWORD: monitor-pass-123
+      TEST_MYSQL_ADMIN_USER: zipzy_admin
+      TEST_MYSQL_ADMIN_PASSWORD: admin-pass-123
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+          python-version: "3.12"
+
+      - name: Create monitoring users (as a customer would)
+        run: |
+          PGPASSWORD=admin-pass-123 psql -h 127.0.0.1 -U zipzy_admin -d shop_test -v ON_ERROR_STOP=1 -c \
+            "CREATE ROLE zipzy_monitor LOGIN PASSWORD 'monitor-pass-123'; GRANT pg_monitor TO zipzy_monitor;"
+          mysql -h 127.0.0.1 -uroot -proot-pass-123 -e "
+            CREATE USER 'zipzy_monitor'@'%' IDENTIFIED BY 'monitor-pass-123';
+            GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'zipzy_monitor'@'%';
+            GRANT SELECT ON performance_schema.* TO 'zipzy_monitor'@'%';
+            CREATE USER 'zipzy_admin'@'%' IDENTIFIED BY 'admin-pass-123';
+            GRANT ALL PRIVILEGES ON *.* TO 'zipzy_admin'@'%';"
+
+      - name: Install dependencies
+        run: uv sync --locked
+
+      - name: Format check
+        run: uv run ruff format --check .
+
+      - name: Lint
+        run: uv run ruff check .
+
+      - name: Type check
+        run: uv run mypy .
+
+      - name: Tests (real Postgres and MySQL)
+        run: uv run pytest -q
+
+      - name: Docker image builds
+        run: docker build -t zipzy-connector:ci .
+
+      - name: Image runs and validates its settings
+        run: |
+          printf 'databases: []\n' > /tmp/connector.yaml
+          docker run --rm -v /tmp/connector.yaml:/config/connector.yaml:ro zipzy-connector:ci check    

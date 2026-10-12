@@ -1,0 +1,23 @@
+# /etc/zipzy/connector.yaml on the server that runs the connector.
+# List every database ZipZy should look after. Passwords stay on this server.
+#
+# Test it before starting:   docker run --rm -v /etc/zipzy/connector.yaml:/config/connector.yaml:ro \
+#                              -e ORDERS_DB_PASSWORD=... ghcr.io/zipzy/dba-connector:0.1 check
+
+databases:
+  - name: orders-db                 # how it is called in ZipZy (letters, digits, . _ -)
+    engine: postgres                # postgres | mysql | mariadb
+    host: 10.0.1.15
+    port: 5432                      # optional (postgres 5432, mysql/mariadb 3306)
+    database: orders                # required for postgres
+    user: zipzy_monitor             # a read-only monitoring user, see README
+    password_env: ORDERS_DB_PASSWORD   # pass with: docker run -e ORDERS_DB_PASSWORD=...
+    tls: require                    # disable | prefer | require | verify-full
+    environment: production         # optional: where it appears in ZipZy at first
+
+  - name: inventory
+    engine: mysql
+    host: 10.0.1.20
+    user: zipzy_monitor
+    password_file: /run/secrets/inventory_db   # or read the password from a mounted file
+    environment: staging
