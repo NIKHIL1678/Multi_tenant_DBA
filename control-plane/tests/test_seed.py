@@ -51,3 +51,18 @@ async def test_demo_databases_land_in_their_environments_once(db: AsyncSession) 
     placed = {name: (env, status) for name, env, status in rows}
     assert placed["payroll"] == ("staging", "connected")
     assert placed["analytics"] == ("production", "error")
+
+
+async def test_demo_servers_list_their_databases(db: AsyncSession) -> None:
+    await seed(db)
+    await seed_demo_databases(db)
+    rows = (await db.execute(select(Datasource.local_name, Datasource.catalog))).all()
+    catalogs = {name: catalog for name, catalog in rows}
+    inventory = catalogs["inventory"]
+    assert inventory is not None
+    assert [d["name"] for d in inventory["databases"]] == [
+        "inventory",
+        "warehouse_sync",
+        "audit_archive",
+    ]
+    assert catalogs["analytics"] is None, "an unreachable server has no catalog"

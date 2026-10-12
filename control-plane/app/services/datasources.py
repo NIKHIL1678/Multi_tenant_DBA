@@ -2,7 +2,9 @@
 
 Where they come from:
     The connector reads connector.yaml, checks each database and reports
-    name + engine + version + capabilities (never passwords, never data).
+    name + engine + version + capabilities + catalog (never passwords, never data).
+    The catalog lists every database on that server (name, size, table count); the last
+    good one is kept while the server is unreachable.
     `sync_from_connector` turns that report into rows. The gateway (Phase 4) calls it.
 
 Where they go (environment):
@@ -214,6 +216,17 @@ async def delete_datasource(
 # ---- reported by a connector -----------------------------------------------------------------
 
 
+def _store_report(ds: Datasource, report: ReportedDatasource, now: datetime) -> None:
+    """Fields a periodic report and an on-demand check both update."""
+    ds.status = DatasourceStatus.CONNECTED if report.reachable else DatasourceStatus.ERROR
+    ds.version = report.version
+    ds.capabilities = report.capabilities
+    ds.last_checked_at = now
+    if report.reachable and report.catalog is not None:
+        ds.catalog = report.catalog.model_dump()
+        ds.catalog_updated_at = now
+
+
 async def _default_environment(
     session: AsyncSession, tenant_id: uuid.UUID, hint: str | None
 ) -> Environment | None:
@@ -254,7 +267,6 @@ async def sync_from_connector(
         if report.local_name in seen:
             continue  # duplicate names in one report: first one wins
         seen.add(report.local_name)
-        status = DatasourceStatus.CONNECTED if report.reachable else DatasourceStatus.ERROR
         ds = existing.get(report.local_name)
         if ds is None:
             env = await _default_environment(session, connector.tenant_id, report.environment)
@@ -272,10 +284,7 @@ async def sync_from_connector(
         else:
             result.updated.append(ds)
         ds.engine = report.engine
-        ds.version = report.version
-        ds.capabilities = report.capabilities
-        ds.status = status
-        ds.last_checked_at = now
+        _store_report(ds, report, now)
 
     for name, ds in existing.items():
         if name not in seen and ds.status != DatasourceStatus.UNKNOWN:
@@ -310,10 +319,6 @@ async def apply_check(
     """Store the result of an on-demand check (same fields a periodic report updates)."""
     if report.local_name != info.datasource.local_name:
         raise CheckMismatchError
-    ds = info.datasource
-    ds.status = DatasourceStatus.CONNECTED if report.reachable else DatasourceStatus.ERROR
-    ds.version = report.version
-    ds.capabilities = report.capabilities
-    ds.last_checked_at = datetime.now(UTC)
+    _store_report(info.datasource, report, datetime.now(UTC))
     await session.flush()
     return info

@@ -105,5 +105,9 @@ class Datasource(Base):
     capabilities: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
     status: Mapped[str] = mapped_column(Text, nullable=False, default=DatasourceStatus.UNKNOWN)
     last_checked_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
+    # Every database on that server as last reported: {"databases": [{name, size_bytes,
+    # tables}], "truncated": bool}. Names and sizes only, never rows. NULL until reported.
+    catalog: Mapped[dict[str, Any] | None] = mapped_column(JSONB)
+    catalog_updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()

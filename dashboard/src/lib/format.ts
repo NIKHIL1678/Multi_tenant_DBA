@@ -42,7 +42,6 @@ export function formatRelative(iso: string, now: number): string {
   return 'now'
 }
 
-
 const timeFormat = new Intl.DateTimeFormat('en-IN', { hour: 'numeric', minute: '2-digit' })
 
 /** "1:04 pm" */
@@ -62,4 +61,18 @@ export function formatDay(iso: string, now: number): string {
   if (key === dayKey(now)) return 'Today'
   if (key === dayKey(now - 86_400_000)) return 'Yesterday'
   return formatDate(iso)
+}
+
+const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
+
+/** 1536 -> "1.5 KB", 6_000_000_000 -> "5.6 GB" (binary units, as database tools show them). */
+export function formatBytes(bytes: number): string {
+  let value = bytes
+  let unit = 0
+  while (value >= 1024 && unit < BYTE_UNITS.length - 1) {
+    value /= 1024
+    unit += 1
+  }
+  const digits = unit === 0 || value >= 100 ? 0 : 1
+  return `${value.toFixed(digits)} ${BYTE_UNITS[unit]}`
 }

@@ -42,7 +42,13 @@ def sign(key: Ed25519PrivateKey, nonce: str, connector_id: str) -> str:
 
 
 DB_REPORT = [
-    {"local_name": "orders-db", "engine": "postgres", "version": "16.4", "reachable": True},
+    {
+        "local_name": "orders-db",
+        "engine": "postgres",
+        "version": "16.4",
+        "reachable": True,
+        "catalog": {"databases": [{"name": "orders", "size_bytes": 1024, "tables": 3}]},
+    },
     {"local_name": "inventory", "engine": "mysql", "version": "8.0.39", "reachable": False},
 ]
 
@@ -301,6 +307,14 @@ async def test_report_updates_databases(ws_url: str, api: AsyncClient, db: Async
 
     await wait_until(two)
     await ws.close()
+    async with session_lock():
+        orders = await db.scalar(
+            select(Datasource)
+            .where(Datasource.connector_id == cid, Datasource.local_name == "orders-db")
+            .execution_options(populate_existing=True)
+        )
+    assert orders is not None and orders.catalog is not None
+    assert orders.catalog["databases"] == [{"name": "orders", "size_bytes": 1024, "tables": 3}]
 
 
 async def test_unknown_message_closes_the_link(

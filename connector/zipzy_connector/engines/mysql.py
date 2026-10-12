@@ -1,12 +1,19 @@
 """MySQL / MariaDB probe (same protocol; told apart by the version string)."""
 
+import re
 import ssl as ssl_lib
 from typing import Any
 
 import aiomysql
 
 from zipzy_connector.config import DatabaseConfig
-from zipzy_connector.engines.base import CONNECT_TIMEOUT_S, ProbeResult, guarded
+from zipzy_connector.engines.base import (
+    CONNECT_TIMEOUT_S,
+    MAX_CATALOG_ENTRIES,
+    ProbeResult,
+    catalog_of,
+    guarded,
+)
 
 # Privileges that let a user change data or the server. A monitoring user needs none of them.
 _WRITE_PRIVILEGES = (
@@ -20,6 +27,38 @@ _WRITE_PRIVILEGES = (
     "CREATE",
     "GRANT OPTION",
 )
+
+# Server-wide privileges that let the monitoring user SEE things (never read rows):
+#   SHOW DATABASES -> every database name;  SHOW VIEW -> table sizes and indexes.
+_LISTS_DATABASES = {"SHOW DATABASES", "ALL PRIVILEGES"}
+_SEES_TABLES = {"SHOW VIEW", "SELECT", "ALL PRIVILEGES"}
+
+# Sizes come from MySQL's table statistics (refreshed by the server, so approximate).
+# System schemas (mysql, sys, information_schema, performance_schema) are left out.
+_CATALOG_SQL = """
+SELECT s.SCHEMA_NAME,
+       SUM(COALESCE(t.DATA_LENGTH, 0) + COALESCE(t.INDEX_LENGTH, 0)),
+       COUNT(t.TABLE_NAME)
+FROM information_schema.SCHEMATA s
+LEFT JOIN information_schema.TABLES t
+       ON t.TABLE_SCHEMA = s.SCHEMA_NAME AND t.TABLE_TYPE = 'BASE TABLE'
+WHERE s.SCHEMA_NAME NOT IN ('mysql', 'sys', 'information_schema', 'performance_schema')
+GROUP BY s.SCHEMA_NAME
+ORDER BY 2 DESC, 1
+LIMIT %s
+"""
+
+_GLOBAL_GRANT = re.compile(r"^GRANT (.+?) ON \*\.\* TO ")
+
+
+def global_privileges(grants: list[str]) -> set[str]:
+    """Privileges granted ON *.* (whole server), e.g. {'PROCESS', 'SHOW DATABASES'}."""
+    found: set[str] = set()
+    for grant in grants:
+        match = _GLOBAL_GRANT.match(grant.upper())
+        if match:
+            found |= {p.strip() for p in match.group(1).split(",")}
+    return found
 
 
 def _ssl(mode: str) -> ssl_lib.SSLContext | None:
@@ -46,6 +85,7 @@ async def probe_mysql(db: DatabaseConfig) -> ProbeResult:
             connect_timeout=CONNECT_TIMEOUT_S,
             autocommit=True,
         )
+        catalog: dict[str, Any] | None = None
         try:
             async with conn.cursor() as cur:
                 # Every statement in this session is read-only, whatever the user's rights are.
@@ -53,13 +93,30 @@ async def probe_mysql(db: DatabaseConfig) -> ProbeResult:
                 await cur.execute("SELECT VERSION(), @@performance_schema")
                 version_raw, perf_schema = await cur.fetchone()
                 await cur.execute("SHOW GRANTS FOR CURRENT_USER()")
-                grants: list[Any] = [row[0] for row in await cur.fetchall()]
+                grants: list[str] = [str(row[0]) for row in await cur.fetchall()]
+                privileges = global_privileges(grants)
+                sees_tables = bool(privileges & _SEES_TABLES)
+                try:
+                    await cur.execute(_CATALOG_SQL, (MAX_CATALOG_ENTRIES + 1,))
+                    rows: list[Any] = list(await cur.fetchall())
+                    catalog = catalog_of(
+                        [
+                            (
+                                str(name),
+                                int(size) if sees_tables and size is not None else None,
+                                int(tables) if sees_tables else None,
+                            )
+                            for name, size, tables in rows
+                        ]
+                    )
+                except aiomysql.Error:
+                    catalog = None  # the probe itself still counts; only the list is missing
         finally:
             conn.close()
 
         version = str(version_raw)
         engine = "mariadb" if "mariadb" in version.lower() else "mysql"
-        grant_text = " ".join(str(g).upper() for g in grants)
+        grant_text = " ".join(g.upper() for g in grants)
         writes = any(p in grant_text for p in _WRITE_PRIVILEGES)
         return ProbeResult(
             name=db.name,
@@ -70,8 +127,11 @@ async def probe_mysql(db: DatabaseConfig) -> ProbeResult:
                 "performance_schema": bool(perf_schema),
                 "least_privilege": not writes,
                 "session_read_only": True,
+                "list_databases": bool(privileges & _LISTS_DATABASES),
+                "table_metadata": sees_tables,
             },
             environment=db.environment,
+            catalog=catalog,
         )
 
     return await guarded(db, run)

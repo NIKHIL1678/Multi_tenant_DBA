@@ -9,14 +9,16 @@ Database passwords never leave the server it runs on.
 1. **Enrol (first start only).** It creates its own Ed25519 key pair, sends the *public* key with
    the one-time token from the install command, and saves its identity in `/data/identity.json`
    (mode 600). Later starts reuse it; the token is no longer needed.
-2. **Probe.** For each database: connect in a **read-only session**, read the version and a few
-   capabilities (for example whether the user is least-privilege). It never reads table rows.
+2. **Probe.** For each database: connect in a **read-only session**, read the version, a few
+   capabilities (for example whether the user is least-privilege) and the **catalog**: every
+   database on that server with its size and table count. It never reads table rows.
 3. **Stay connected.** It opens ONE outbound WebSocket to ZipZy, signs a fresh challenge with
    its key, and reports its databases (they appear in ZipZy by themselves). It answers ZipZy's
    pings, re-checks every database every 5 minutes, and runs **allow-listed, read-only tools**
    on request (today: `probe`). Nothing can make it run SQL sent from outside.
 4. **Reconnect** by itself after network trouble or a ZipZy restart (1 s → 60 s pauses). It stops
    only when the connector is **revoked** in ZipZy or its key is refused (exit code 2).
+
 ## Create a monitoring user
 
 PostgreSQL:
@@ -29,9 +31,22 @@ GRANT pg_monitor TO zipzy_monitor;
 MySQL / MariaDB:
 ```sql
 CREATE USER 'zipzy_monitor'@'%' IDENTIFIED BY '...';
-GRANT PROCESS, REPLICATION CLIENT ON *.* TO 'zipzy_monitor'@'%';
+GRANT PROCESS, REPLICATION CLIENT, SHOW DATABASES, SHOW VIEW ON *.* TO 'zipzy_monitor'@'%';
 GRANT SELECT ON performance_schema.* TO 'zipzy_monitor'@'%';
 ```
+
+What each grant allows (none of them reads or changes table rows):
+
+| Grant | Lets ZipZy see |
+|---|---|
+| `PROCESS` | running queries and locks |
+| `REPLICATION CLIENT` | replication status |
+| `SHOW DATABASES` | the name of every database on the server |
+| `SHOW VIEW` | table sizes and indexes (and view definitions) |
+| `SELECT ON performance_schema.*` | query statistics (slow queries) |
+
+If the server also has a `'zipzy_monitor'@'localhost'` account, give it the same grants: MySQL
+uses the most specific account for local connections.
 
 The connector also opens every session as read-only, so even a too-powerful user cannot change
 data through it; `check` warns when the user has write rights.

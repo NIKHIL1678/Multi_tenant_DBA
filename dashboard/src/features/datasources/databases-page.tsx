@@ -15,12 +15,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useConnectors } from '@/features/connectors/api'
 import { AddDatabaseHelp } from '@/features/datasources/add-database-help'
-import { useDatasources, useDeleteDatasource } from '@/features/datasources/api'
+import { useCheckDatasource, useDatasources, useDeleteDatasource } from '@/features/datasources/api'
 import { DatasourceActions, type DatasourceActionKind } from '@/features/datasources/datasource-actions'
 import { DatasourceStatusBadge, EngineBadge, EnvironmentTag } from '@/features/datasources/datasource-badges'
 import { DATASOURCE_STATUS, ENGINE_LABELS } from '@/features/datasources/labels'
 import { MoveDialog } from '@/features/datasources/move-dialog'
+import { CatalogSummary, ServerDatabasesSheet } from '@/features/datasources/server-databases-sheet'
 import { useEnvironments } from '@/features/environments/api'
+import { describeError } from '@/lib/api'
 import { formatDateTime, formatRelative } from '@/lib/format'
 import { Permission } from '@/lib/permissions'
 import { useTenant } from '@/lib/tenant-context'
@@ -45,6 +47,7 @@ export function DatabasesPage() {
   const environments = useEnvironments(tenant.id)
   const connectors = useConnectors(tenant.id)
   const remove = useDeleteDatasource(tenant.id)
+  const check = useCheckDatasource(tenant.id)
 
   const [params, setParams] = useSearchParams()
   const filter = (key: FilterKey) => params.get(key) ?? ''
@@ -96,7 +99,20 @@ export function DatabasesPage() {
 
   const [helpOpen, setHelpOpen] = useState(false)
   const [action, setAction] = useState<Action | null>(null)
+  const runCheck = (d: Datasource) => {
+    check.mutate(d.id, {
+      onSuccess: (ds) => {
+        if (ds.status === 'connected') toast.success(`${ds.local_name} is reachable`)
+        else toast.error(`${ds.local_name} could not be reached`)
+      },
+      onError: (err) => toast.error(describeError(err)),
+    })
+  }
   const openAction = (kind: DatasourceActionKind, datasource: Datasource) => {
+    if (kind === 'check') {
+      runCheck(datasource)
+      return
+    }
     remove.reset()
     setAction({ kind, datasource, open: true })
   }
@@ -105,6 +121,8 @@ export function DatabasesPage() {
   }
   const isOpen = (kind: DatasourceActionKind) => action?.kind === kind && action.open
   const target = action?.datasource ?? null
+  // The panel follows the live row, so a check refreshes what it shows.
+  const live = (target && all.find((d) => d.id === target.id)) ?? target
 
   async function confirmRemove() {
     if (!target) return
@@ -117,8 +135,10 @@ export function DatabasesPage() {
     close(false)
   }
 
-  const actionsFor = (d: Datasource) =>
-    canManage ? <DatasourceActions datasource={d} isOwner={isOwner} onAction={openAction} /> : null
+  const actionsFor = (d: Datasource) => (
+    <DatasourceActions datasource={d} canManage={canManage} isOwner={isOwner} onAction={openAction} />
+  )
+  const showDatabases = (d: Datasource) => openAction('databases', d)
 
   return (
     <>
@@ -220,11 +240,11 @@ export function DatabasesPage() {
                 <Table>
                   <TableHeader>
                     <TableRow className="hover:bg-transparent">
-                      <TableHead>Database</TableHead>
+                      <TableHead>Server</TableHead>
+                      <TableHead>Databases inside</TableHead>
                       <TableHead>Environment</TableHead>
-                      <TableHead>Connector</TableHead>
+                      <TableHead className="hidden lg:table-cell">Connector</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead>Last checked</TableHead>
                       <TableHead className="w-14">
                         <span className="sr-only">Actions</span>
                       </TableHead>
@@ -237,15 +257,18 @@ export function DatabasesPage() {
                           <p className="truncate font-mono font-medium">{d.local_name}</p>
                           <EngineBadge engine={d.engine} version={d.version} />
                         </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          <CatalogSummary datasource={d} onOpen={() => showDatabases(d)} />
+                        </TableCell>
                         <TableCell className="max-w-48">
                           <EnvironmentTag name={d.environment.name} production={d.environment.is_production} />
                         </TableCell>
-                        <TableCell className="max-w-48 truncate text-muted-foreground">{d.connector.name}</TableCell>
-                        <TableCell>
+                        <TableCell className="hidden max-w-48 truncate text-muted-foreground lg:table-cell">{d.connector.name}</TableCell>
+                        <TableCell className="whitespace-nowrap">
                           <DatasourceStatusBadge status={d.status} />
-                        </TableCell>
-                        <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
-                          <Checked iso={d.last_checked_at} now={now} />
+                          <p className="mt-1 text-xs text-muted-foreground">
+                            <Checked iso={d.last_checked_at} now={now} />
+                          </p>
                         </TableCell>
                         <TableCell className="text-right">{actionsFor(d)}</TableCell>
                       </TableRow>
@@ -268,6 +291,11 @@ export function DatabasesPage() {
                       <EngineBadge engine={d.engine} version={d.version} />
                       <DatasourceStatusBadge status={d.status} />
                     </div>
+                    {d.catalog && (
+                      <div className="text-sm">
+                        <CatalogSummary datasource={d} onOpen={() => showDatabases(d)} />
+                      </div>
+                    )}
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                       <EnvironmentTag name={d.environment.name} production={d.environment.is_production} />
                       <span className="truncate">via {d.connector.name}</span>
@@ -282,7 +310,7 @@ export function DatabasesPage() {
           {filtering && filtered.length > 0 && (
             <p className="text-xs text-muted-foreground">
               Showing {filtered.length} of {all.length} databases ·{' '}
-              <button type="button" onClick={clearFilters} className="font-medium text-primary underline-offset-4 hover:underline">
+              <button type="button" onClick={clearFilters} className="font-medium text-link underline-offset-4 hover:underline">
                 Clear filters
               </button>
             </p>
@@ -291,6 +319,14 @@ export function DatabasesPage() {
       )}
 
       <AddDatabaseHelp open={helpOpen} onOpenChange={setHelpOpen} />
+      <ServerDatabasesSheet
+        tenantId={tenant.id}
+        datasource={live}
+        open={isOpen('databases')}
+        onOpenChange={close}
+        onCheck={runCheck}
+        checking={check.isPending && check.variables === live?.id}
+      />
       {canManage && (
         <>
           <MoveDialog

@@ -359,6 +359,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/databases": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Server Databases
+         * @description The databases on this server as last reported (biggest first). Names and sizes only.
+         */
+        get: operations["list_server_databases_v1_tenants__tenant_id__datasources__datasource_id__databases_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenants/{tenant_id}/environments": {
         parameters: {
             query?: never;
@@ -563,6 +583,29 @@ export interface components {
             /** Target Type */
             target_type: string | null;
         };
+        /** CatalogDatabase */
+        CatalogDatabase: {
+            /** Name */
+            name: string;
+            /** Size Bytes */
+            size_bytes: number | null;
+            /** Tables */
+            tables: number | null;
+        };
+        /** CatalogSummary */
+        CatalogSummary: {
+            /** Database Count */
+            database_count: number;
+            /** Total Size Bytes */
+            total_size_bytes: number | null;
+            /** Truncated */
+            truncated: boolean;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
         /** ConnectorCreateIn */
         ConnectorCreateIn: {
             /** Name */
@@ -617,6 +660,20 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** DatasourceCatalogOut */
+        DatasourceCatalogOut: {
+            /** Databases */
+            databases: components["schemas"]["CatalogDatabase"][];
+            /**
+             * Datasource Id
+             * Format: uuid
+             */
+            datasource_id: string;
+            /** Truncated */
+            truncated: boolean;
+            /** Updated At */
+            updated_at: string | null;
+        };
         /** DatasourceMoveIn */
         DatasourceMoveIn: {
             /**
@@ -631,6 +688,7 @@ export interface components {
             capabilities: {
                 [key: string]: unknown;
             } | null;
+            catalog: components["schemas"]["CatalogSummary"] | null;
             connector: components["schemas"]["ConnectorRef"];
             /**
              * Created At
@@ -1946,6 +2004,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_server_databases_v1_tenants__tenant_id__datasources__datasource_id__databases_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                datasource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasourceCatalogOut"];
                 };
             };
             /** @description Validation Error */

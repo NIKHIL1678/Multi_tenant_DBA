@@ -3,6 +3,7 @@
 A probe:
 - connects with the configured (monitoring) user, in a READ-ONLY session,
 - learns the version and a few capabilities,
+- lists the databases on the server (names, sizes, table counts: the "catalog"),
 - never reads table rows,
 - turns any failure into a short, password-free reason.
 """
@@ -16,6 +17,8 @@ from zipzy_connector.config import ConfigError, DatabaseConfig
 
 CONNECT_TIMEOUT_S = 10
 PROBE_TIMEOUT_S = 20
+# A server can hold thousands of databases; report the biggest ones and say it was cut.
+MAX_CATALOG_ENTRIES = 1000
 
 
 @dataclass(slots=True)
@@ -28,6 +31,8 @@ class ProbeResult:
     # Why it failed, in words safe to show (no passwords, no hostnames beyond the config).
     error: str | None = None
     environment: str | None = None
+    # {"databases": [{"name", "size_bytes", "tables"}], "truncated": bool}; None if not collected.
+    catalog: dict[str, Any] | None = None
 
     def report(self) -> dict[str, Any]:
         """Shape the control plane expects (schemas.datasources.ReportedDatasource)."""
@@ -38,10 +43,22 @@ class ProbeResult:
             "reachable": self.reachable,
             "capabilities": self.capabilities or None,
             "environment": self.environment,
+            "catalog": self.catalog,
         }
 
 
 Prober = Callable[[DatabaseConfig], Awaitable[ProbeResult]]
+
+
+def catalog_of(rows: list[tuple[str, int | None, int | None]]) -> dict[str, Any]:
+    """rows: (name, size_bytes, tables), biggest first, at most MAX_CATALOG_ENTRIES + 1."""
+    return {
+        "databases": [
+            {"name": name, "size_bytes": size, "tables": tables}
+            for name, size, tables in rows[:MAX_CATALOG_ENTRIES]
+        ],
+        "truncated": len(rows) > MAX_CATALOG_ENTRIES,
+    }
 
 
 def failed(db: DatabaseConfig, reason: str) -> ProbeResult:
