@@ -22,6 +22,8 @@ from app.audit import record_audit
 from app.auth.current_user import CurrentUser, DbSession
 from app.auth.permissions import require
 from app.core.logging import tenant_id_var
+from app.gateway.hub import ConnectorHub, get_hub
+from app.gateway.protocol import CloseCode
 from app.models.enums import ActorType
 from app.rbac.catalog import Permission
 from app.rbac.service import AccessContext
@@ -201,6 +203,7 @@ async def revoke_connector(
     connector_id: uuid.UUID,
     _: CanManage,
     user: CurrentUser,
+    hub: Annotated[ConnectorHub, Depends(get_hub)],
     session: DbSession,
     request: Request,
 ) -> ConnectorOut:
@@ -220,6 +223,8 @@ async def revoke_connector(
         request=request,
     )
     await session.commit()
+    # Its key is erased; also drop the live link now instead of waiting for the next handshake.
+    await hub.disconnect(connector_id, CloseCode.REVOKED, "revoked")
     return _out(info)
 
 

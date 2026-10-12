@@ -11,9 +11,12 @@ Database passwords never leave the server it runs on.
    (mode 600). Later starts reuse it; the token is no longer needed.
 2. **Probe.** For each database: connect in a **read-only session**, read the version and a few
    capabilities (for example whether the user is least-privilege). It never reads table rows.
-3. **Gateway link** (next version): a signed, outbound-only connection to ZipZy that carries the
-   allow-listed monitoring requests.
-
+3. **Stay connected.** It opens ONE outbound WebSocket to ZipZy, signs a fresh challenge with
+   its key, and reports its databases (they appear in ZipZy by themselves). It answers ZipZy's
+   pings, re-checks every database every 5 minutes, and runs **allow-listed, read-only tools**
+   on request (today: `probe`). Nothing can make it run SQL sent from outside.
+4. **Reconnect** by itself after network trouble or a ZipZy restart (1 s → 60 s pauses). It stops
+   only when the connector is **revoked** in ZipZy or its key is refused (exit code 2).
 ## Create a monitoring user
 
 PostgreSQL:
@@ -37,7 +40,7 @@ data through it; `check` warns when the user has write rights.
 
 ```
 zipzy-connector check   # test every database from this server (no ZipZy needed); exit 1 if one fails
-zipzy-connector run     # enrol on first start, then keep running (the Docker default)
+zipzy-connector run     # enrol on first start, then stay connected to ZipZy (the Docker default)
 ```
 
 ## Environment

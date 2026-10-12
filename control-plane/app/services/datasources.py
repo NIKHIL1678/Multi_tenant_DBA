@@ -295,3 +295,25 @@ async def sync_from_connector(
             details={"name": ds.local_name, "engine": ds.engine},
         )
     return result
+
+
+# ---- checked on demand -----------------------------------------------------------------------
+
+
+class CheckMismatchError(Exception):
+    """The connector answered about a different database than the one asked for."""
+
+
+async def apply_check(
+    session: AsyncSession, info: DatasourceInfo, report: ReportedDatasource
+) -> DatasourceInfo:
+    """Store the result of an on-demand check (same fields a periodic report updates)."""
+    if report.local_name != info.datasource.local_name:
+        raise CheckMismatchError
+    ds = info.datasource
+    ds.status = DatasourceStatus.CONNECTED if report.reachable else DatasourceStatus.ERROR
+    ds.version = report.version
+    ds.capabilities = report.capabilities
+    ds.last_checked_at = datetime.now(UTC)
+    await session.flush()
+    return info
