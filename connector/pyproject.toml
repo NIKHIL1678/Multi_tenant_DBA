@@ -1,6 +1,6 @@
 [project]
 name = "zipzy-dba-connector"
-version = "0.1.0"
+version = "0.2.0"
 description = "ZipZy DBA connector: runs inside the customer's network, reaches their databases, dials out to ZipZy."
 requires-python = ">=3.12"
 dependencies = [
@@ -10,6 +10,7 @@ dependencies = [
   "cryptography>=43",
   "asyncpg>=0.30",
   "aiomysql>=0.2",
+  "websockets>=13",
 ]
 
 [project.scripts]

@@ -2,8 +2,8 @@
 
     zipzy-connector check   test every database in connector.yaml from this server
                             (no ZipZy needed)
-    zipzy-connector run     enrol on first start, then keep checking
-                            (the link to the ZipZy gateway arrives in the next version)
+    zipzy-connector run     enrol on first start, then stay connected to ZipZy and answer
+                            its allow-listed, read-only requests
 
 Exit codes: 0 ok, 1 a database is unreachable (check), 2 configuration or enrolment problem.
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import httpx
 
-from zipzy_connector import __version__, log
+from zipzy_connector import __version__, gateway, log
 from zipzy_connector.config import (
     ConfigError,
     ConnectorFile,
@@ -25,8 +25,6 @@ from zipzy_connector.config import (
 )
 from zipzy_connector.engines import ProbeResult, probe
 from zipzy_connector.identity import EnrollmentError, ensure_enrolled
-
-CHECK_INTERVAL_S = 60
 
 
 async def probe_all(config: ConnectorFile) -> list[ProbeResult]:
@@ -82,14 +80,13 @@ async def cmd_run() -> int:
             return 2
     log.info("enrolled" if new else "identity loaded", connector_id=identity.connector_id)
 
-    while True:
-        for r in await probe_all(config):
-            fields = {"database": r.name, "engine": r.engine, "version": r.version}
-            if r.reachable:
-                log.info("database reachable", **fields, capabilities=r.capabilities)
-            else:
-                log.warn("database unreachable", **fields, reason=r.error)
-        await asyncio.sleep(CHECK_INTERVAL_S)
+    for r in await probe_all(config):
+        fields = {"database": r.name, "engine": r.engine, "version": r.version}
+        if r.reachable:
+            log.info("database reachable", **fields, capabilities=r.capabilities)
+        else:
+            log.warn("database unreachable", **fields, reason=r.error)
+    return await gateway.run_forever(settings.zipzy_url, identity, config)
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -100,7 +97,7 @@ def main(argv: list[str] | None = None) -> None:
     check.add_argument(
         "--config", help="path to connector.yaml (default: $ZIPZY_CONFIG or /config/connector.yaml)"
     )
-    sub.add_parser("run", help="enrol, then keep running")
+    sub.add_parser("run", help="enrol, then stay connected to ZipZy")
     args = parser.parse_args(argv)
 
     if args.command == "check":

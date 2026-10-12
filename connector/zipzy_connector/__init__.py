@@ -5,4 +5,4 @@ there with a read-only monitoring user, and only ever dials OUT to ZipZy. Databa
 never leave this program.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

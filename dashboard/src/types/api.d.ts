@@ -339,6 +339,26 @@ export interface paths {
         patch: operations["move_datasource_v1_tenants__tenant_id__datasources__datasource_id__patch"];
         trace?: never;
     };
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Check Datasource
+         * @description Ask the database's connector to test it right now (read-only; needs metadata.read there).
+         */
+        post: operations["check_datasource_v1_tenants__tenant_id__datasources__datasource_id__check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenants/{tenant_id}/environments": {
         parameters: {
             query?: never;
@@ -1883,6 +1903,41 @@ export interface operations {
                 "application/json": components["schemas"]["DatasourceMoveIn"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DatasourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    check_datasource_v1_tenants__tenant_id__datasources__datasource_id__check_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                datasource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

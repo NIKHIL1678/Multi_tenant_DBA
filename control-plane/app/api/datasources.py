@@ -5,6 +5,7 @@ GET    /v1/tenants/{tenant_id}/datasources                 filters: environment_
 GET    /v1/tenants/{tenant_id}/datasources/{datasource_id}
 PATCH  /v1/tenants/{tenant_id}/datasources/{datasource_id}  {environment_id}  move
 DELETE /v1/tenants/{tenant_id}/datasources/{datasource_id}
+POST   /v1/tenants/{tenant_id}/datasources/{datasource_id}/check   ask its connector to test it now
 
 Permissions are checked PER ENVIRONMENT (overrides apply), not just company-wide:
 - see:    metadata.read in the datasource's environment (otherwise it looks like it doesn't exist)
@@ -18,10 +19,17 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query, Request, status
 
-from app.api.errors import ApiError, forbidden, not_found
+from app.api.errors import ApiError, conflict, forbidden, not_found
 from app.audit import record_audit
 from app.auth.current_user import CurrentUser, DbSession
 from app.auth.permissions import require_member
+from app.gateway.hub import (
+    ConnectorHub,
+    ConnectorOfflineError,
+    RequestTimeoutError,
+    ToolFailedError,
+    get_hub,
+)
 from app.models.enums import DatasourceStatus, DbEngine
 from app.rbac.catalog import Permission
 from app.rbac.service import AccessContext, environments_with_permission
@@ -30,12 +38,16 @@ from app.schemas.datasources import (
     DatasourceMoveIn,
     DatasourceOut,
     EnvironmentRef,
+    ReportedDatasource,
 )
 from app.services import datasources as svc
 
 router = APIRouter(prefix="/v1/tenants/{tenant_id}/datasources", tags=["datasources"])
 
 Member = Annotated[AccessContext, Depends(require_member)]
+
+
+CHECK_TIMEOUT_SECONDS = 30
 
 
 def _out(info: svc.DatasourceInfo) -> DatasourceOut:
@@ -189,3 +201,44 @@ async def delete_datasource(
         request=request,
     )
     await session.commit()
+
+
+@router.post("/{datasource_id}/check")
+async def check_datasource(
+    tenant_id: uuid.UUID,
+    datasource_id: uuid.UUID,
+    _: Member,
+    user: CurrentUser,
+    session: DbSession,
+    hub: Annotated[ConnectorHub, Depends(get_hub)],
+) -> DatasourceOut:
+    """Ask the database's connector to test it right now (read-only; needs metadata.read there)."""
+    try:
+        info = await svc.get_visible(
+            session, user_id=user.user_id, tenant_id=tenant_id, datasource_id=datasource_id
+        )
+    except _RULE_ERRORS as exc:
+        raise _translate(exc) from None
+
+    try:
+        result = await hub.request(
+            info.connector.id,
+            "probe",
+            {"datasource": info.datasource.local_name},
+            wait_seconds=CHECK_TIMEOUT_SECONDS,
+        )
+        report = ReportedDatasource.model_validate(result)
+        await svc.apply_check(session, info, report)
+    except ConnectorOfflineError:
+        raise conflict(
+            f"Connector {info.connector.name} is offline, so this database cannot be checked now."
+        ) from None
+    except RequestTimeoutError:
+        raise ApiError(504, "connector_timeout", "The connector did not answer in time.") from None
+    except ToolFailedError as exc:
+        raise ApiError(502, "connector_error", exc.message) from None
+    except (ValueError, svc.CheckMismatchError):
+        raise ApiError(502, "connector_error", "The connector sent an unexpected answer.") from None
+
+    await session.commit()
+    return _out(info)

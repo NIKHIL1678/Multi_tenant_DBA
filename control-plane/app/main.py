@@ -14,6 +14,7 @@ from app.api import (
     datasources,
     dev,
     environments,
+    gateway,
     health,
     invitations,
     me,
@@ -24,8 +25,9 @@ from app.api.errors import install_error_handlers
 from app.api.middleware import REQUEST_ID_HEADER, request_context
 from app.auth.current_user import DEV_USER_HEADER
 from app.core.config import get_settings
-from app.core.db import get_engine
+from app.core.db import get_engine, get_sessionmaker
 from app.core.logging import configure_logging
+from app.gateway import service as gateway_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +36,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     settings = get_settings()
     logger.info("startup", extra={"app_env": settings.app_env, "dev_auth": settings.dev_auth})
+    # No connector link survives a restart: whoever was "online" must reconnect first.
+    async with get_sessionmaker()() as session:
+        reset = await gateway_service.reset_online_flags(session)
+    if reset:
+        logger.info("connectors marked offline at startup", extra={"count": reset})
     yield
     await get_engine().dispose()
     logger.info("shutdown")
@@ -73,6 +80,7 @@ def create_app() -> FastAPI:
     app.include_router(environments.router)
     app.include_router(connectors.tenant_router)
     app.include_router(connectors.public_router)
+    app.include_router(gateway.router)
     app.include_router(datasources.router)
     app.include_router(audit_log.router)
     if settings.dev_auth:

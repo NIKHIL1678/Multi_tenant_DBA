@@ -1,4 +1,5 @@
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
+from contextlib import AbstractAsyncContextManager, asynccontextmanager
 from functools import lru_cache
 
 from sqlalchemy import text
@@ -36,6 +37,21 @@ async def get_session() -> AsyncIterator[AsyncSession]:
     """FastAPI dependency: one session per request."""
     async with get_sessionmaker()() as session:
         yield session
+
+
+SessionFactory = Callable[[], AbstractAsyncContextManager[AsyncSession]]
+
+
+@asynccontextmanager
+async def _new_session() -> AsyncIterator[AsyncSession]:
+    async with get_sessionmaker()() as session:
+        yield session
+
+
+def get_session_factory() -> SessionFactory:
+    """FastAPI dependency for long-lived handlers (WebSockets): open a short session per step,
+    never one session for the whole connection."""
+    return _new_session
 
 
 async def check_database() -> str:
