@@ -86,38 +86,38 @@ jobs:
       - run: npm run lint
       - run: npm run build
 
-    connector:
-      runs-on: ubuntu-latest
-      timeout-minutes: 15
-      defaults:
-        run:
-          working-directory: connector
+  connector:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: connector
 
-      services:
-        postgres:
-          image: postgres:16
-          env:
-            POSTGRES_USER: zipzy_admin
-            POSTGRES_PASSWORD: admin-pass-123
-            POSTGRES_DB: shop_test
-          ports:
-            - 5432:5432
-          options: >-
-            --health-cmd "pg_isready -U zipzy_admin -d shop_test"
-            --health-interval 5s
-            --health-timeout 5s
-            --health-retries 10
-        mysql:
-          image: mysql:8.0
-          env:
-            MYSQL_ROOT_PASSWORD: root-pass-123
-          ports:
-            - 3306:3306
-          options: >-
-            --health-cmd "mysqladmin ping -h 127.0.0.1 -proot-pass-123"
-            --health-interval 5s
-            --health-timeout 5s
-            --health-retries 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: zipzy_admin
+          POSTGRES_PASSWORD: admin-pass-123
+          POSTGRES_DB: shop_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U zipzy_admin -d shop_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root-pass-123
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -proot-pass-123"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
 
     env:
       TEST_PG_HOST: 127.0.0.1
@@ -172,4 +172,4 @@ jobs:
       - name: Image runs and validates its settings
         run: |
           printf 'databases: []\n' > /tmp/connector.yaml
-          docker run --rm -v /tmp/connector.yaml:/config/connector.yaml:ro zipzy-connector:ci check    
+          docker run --rm -v /tmp/connector.yaml:/config/connector.yaml:ro zipzy-connector:ci check
