@@ -8,6 +8,7 @@ sent from outside.
 from collections.abc import Awaitable, Callable
 from typing import Any
 
+from zipzy_connector.collectors import CollectorError, collect
 from zipzy_connector.config import ConnectorFile
 from zipzy_connector.engines import probe
 
@@ -36,8 +37,22 @@ async def tool_probe(config: ConnectorFile, args: dict[str, Any]) -> dict[str, A
     return {**result.report(), "error": result.error}
 
 
+def _collector(name: str) -> Tool:
+    async def run(config: ConnectorFile, args: dict[str, Any]) -> dict[str, Any]:
+        try:
+            return await collect(name, _database(config, args))
+        except CollectorError as exc:
+            raise ToolError(exc.code, exc.message) from None
+
+    run.__doc__ = f"Run the read-only '{name}' collector on one database."
+    return run
+
+
 TOOLS: dict[str, Tool] = {
     "probe": tool_probe,
+    "health": _collector("health"),
+    "table_stats": _collector("table_stats"),
+    "indexes": _collector("indexes"),
 }
 
 

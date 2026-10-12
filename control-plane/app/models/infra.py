@@ -16,7 +16,7 @@ from app.models.base import (
     updated_at_col,
     uuid_pk,
 )
-from app.models.enums import ConnectorStatus, DatasourceStatus, DbEngine
+from app.models.enums import Collector, ConnectorStatus, DatasourceStatus, DbEngine
 
 
 class Environment(Base):
@@ -111,3 +111,28 @@ class Datasource(Base):
     catalog_updated_at: Mapped[datetime | None] = mapped_column(TIMESTAMPTZ)
     created_at: Mapped[datetime] = created_at_col()
     updated_at: Mapped[datetime] = updated_at_col()
+
+
+class Snapshot(Base):
+    """What one collector found on one datasource at one moment (kept for trends).
+
+    `data` is the connector's answer after validation (schemas.snapshots): metadata and
+    statistics only, never table rows. Removed with its datasource.
+    """
+
+    __tablename__ = "snapshots"
+    __table_args__ = (
+        Index(None, "datasource_id", "collector", "collected_at"),
+        enum_check("collector", Collector),
+    )
+
+    id: Mapped[uuid.UUID] = uuid_pk()
+    tenant_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False
+    )
+    datasource_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("datasources.id", ondelete="CASCADE"), nullable=False
+    )
+    collector: Mapped[str] = mapped_column(Text, nullable=False)
+    data: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    collected_at: Mapped[datetime] = created_at_col()

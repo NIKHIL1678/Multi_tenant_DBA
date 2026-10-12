@@ -9,6 +9,7 @@ import { SignupPage } from '@/features/auth/signup-page'
 import { NotFoundContent, NotFoundPage } from '@/features/common/not-found-page'
 import { ConnectorsPage } from '@/features/connectors/connectors-page'
 import { DatabasesPage } from '@/features/datasources/databases-page'
+import { ServerPage } from '@/features/datasources/server/server-page'
 import { EnvironmentsPage } from '@/features/environments/environments-page'
 import { InvitePage } from '@/features/invitations/invite-page'
 import { MembersPage } from '@/features/members/members-page'
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
         children: [
           { index: true, element: <OverviewPage /> },
           { path: 'databases', element: <DatabasesPage /> },
+          { path: 'databases/:datasourceId', element: <ServerPage /> },
           { path: 'environments', element: <EnvironmentsPage /> },
           { path: 'connectors', element: <ConnectorsPage /> },
           { path: 'members', element: <MembersPage /> },
