@@ -49,40 +49,55 @@ the specialist that found the problem knows the fix best, and the Verifier check
 
 ```mermaid
 flowchart TD
-    IN([Explain / question / nightly]) --> PLAN[Orchestrator: plan]
-    PLAN -->|Send, in parallel| H[Health agent]
-    PLAN --> Q[Query Performance agent]
-    PLAN --> S[Schema agent]
-    H --> V[Verifier - code]
+    IN(["Explain / question"]) --> PLAN["plan: Orchestrator model, or the problem for Explain"]
+    PLAN -->|"off-topic or rows asked"| END1(["short answer"])
+    PLAN --> RES["resolve: find the table (code)"]
+    RES -->|"two equal matches"| END2(["Which table? with buttons"])
+    RES --> GAT["gather: statistics to facts (code)"]
+    GAT -->|"Send, in parallel"| H["Health agent"]
+    GAT --> Q["Query Performance agent"]
+    GAT --> S["Schema agent"]
+    H --> V["verify (code)"]
     Q --> V
     S --> V
-    V --> C[Orchestrator: compose answer]
-    C --> OUT([Answer + findings + pending actions])
+    V --> C["compose: Orchestrator model"]
+    C --> OUT(["Answer, verified findings, suggested SQL"])
 ```
 
-- **plan** — structured output: which specialists to run (1–3) and a focused sub-question
-  for each. *Explain* skips planning: the problem's category picks the specialist.
-- **specialists** — each is a small tool-calling loop limited to its own tools, at most
-  **4 tool calls**, returning `Finding[]` as strict JSON.
+- **plan** — chat: one model call returns whether the question is about this server, whether
+  it asks for row values, the specialists (1–3), the words naming a table and a period.
+  *Explain* makes no call: the problem decides the specialists (`app/ai/problems.py`).
+- **resolve** — `find_tables` (code). Two equally good matches end the run as `needs_input`
+  with the tables as buttons; the person's choice starts the next run with the same question
+  and the table saved in the conversation. A table the conversation already chose is reused.
+- **gather** — code asks the connector for each needed collector older than 5 minutes (stored
+  ones if it is offline, with how old they are) and turns them into facts.
+- **specialists** — **one model call each, facts in, findings out** (strict JSON). The model
+  never calls tools: code fetched the data ([ADR 0007](adr/0007-code-fetches-ai-analyses.md)).
+  One failing specialist gives a partial answer; all failing fails the run.
 - **verify** — pure Python, see below.
-- **compose** — turns verified findings into the reply for the entry point (chat answer,
-  explanation, or report sections).
+- **compose** — one model call turns verified findings and notes into the reply.
+
+No LangGraph checkpointer is used: a run that needs input *ends*, and the answer starts a new
+run, so all state lives in our own tables (managed by Alembic).
 
 ### Run state
 
 ```python
-class RunState(TypedDict):
-    run_id: UUID
-    tenant_id: UUID
-    datasource_id: UUID          # set by the server, never by the model
-    engine: Literal["mysql", "postgres"]
-    kind: Literal["explain", "chat", "report"]
+class RunState(TypedDict, total=False):
+    kind: str                      # chat | explain
     question: str
-    history: list[Message]       # last 10 chat messages, chat only
-    plan: list[Task]
-    facts: dict[str, Fact]       # "H1", "T3", "I7" … every number a tool returned
-    findings: list[Finding]
+    engine: str                    # the datasource is fixed in the toolbox, never in state
+    history: list[dict]            # last 10 messages of the conversation
+    context: dict                  # {"table": "hrm.attendance_*", "period": "2026-11"}
+    specialists: list[str]
+    focus: list[str]               # "schema.table" the question is about
+    evidence: Evidence             # facts "H1", "T3", "Q2"… and what exists, for the Verifier
+    reports: list[dict]            # specialists' findings (merged from parallel branches)
+    verified: list[VerifiedFinding]
+    notes: list[str]               # what could not be checked, and why
     answer: str
+    clarification: dict | None     # "Which table do you mean?" + options
 ```
 
 ### Facts and evidence
@@ -217,22 +232,30 @@ sequenceDiagram
 | `action_approvals` | Who approved or rejected, when, and the signed approval issued |
 | `ai_usage_daily` | Per-tenant tokens and runs per day, for limits |
 
-All are tenant-scoped (RLS like every other table) and documented in
-[04 Data model](04-data-model.md) by the PR that adds them.
+Every row carries `tenant_id` and every query filters by it after the API has checked access
+(the metadata database does not use row-level security). They are documented in
+[04 Data model](04-data-model.md) by the PR that adds them: 5.2 adds `agent_runs`,
+`findings`, `ai_conversations`, `ai_messages` and `ai_usage_daily` (migration 0007).
 
 ## API
 
-| Method & path | What |
-|---|---|
-| `POST /v1/datasources/{id}/ai/runs` | Start a run (`explain` with a problem key, or `chat` with a message) → `202` + run id |
-| `GET /v1/ai/runs/{run_id}` | Status, steps so far ("Checking indexes…"), answer, findings |
-| `GET /v1/datasources/{id}/ai/conversations` | Chat history |
-| `GET /v1/datasources/{id}/findings` | Open findings |
-| `GET /v1/datasources/{id}/actions` | Actions by status |
-| `POST /v1/actions/{id}/approve` · `/reject` · `/execute` | Approval workflow |
-| `GET /v1/datasources/{id}/reports` · `POST …/reports` | Reports, generate now |
+All under `/v1/tenants/{tenant_id}`.
 
-The dashboard polls a running run every second; it works unchanged through the demo tunnel.
+| Method & path | What | PR |
+|---|---|---|
+| `GET /ai/status` | AI set up?; runs and tokens used today and the limits | 5.2 |
+| `POST /datasources/{id}/ai/runs` | Start a run → `202` + run. `{kind: "chat", message, conversation_id?}`, `{kind: "chat", table, conversation_id}` (answer to "Which table?"), `{kind: "explain", problem, problem_title}` | 5.2 |
+| `GET /ai/runs/{run_id}` | Status, progress steps, answer, follow-ups, clarification, notes, findings with evidence | 5.2 |
+| `GET /datasources/{id}/ai/conversations` | My conversations about this datasource | 5.2 |
+| `GET /ai/conversations/{id}` | One conversation: messages and its runs | 5.2 |
+| `GET /datasources/{id}/actions` · `POST /actions/{id}/approve` · `/reject` · `/execute` | Approval workflow | 5.3 |
+| `GET /datasources/{id}/reports` · `POST …/reports` | Reports, generate now | 5.4 |
+
+Errors (stable `code`): `ai_disabled` 503 (no key), `ai_busy` 409 (a run of yours is going),
+`ai_limit` 429 (daily allowance used), `unknown_problem` 422. Runs and conversations are
+private to the person who started them. Asking needs `metadata.read` **and** `findings.read`
+in the datasource's environment. The dashboard polls a running run every second; it works
+unchanged through the demo tunnel.
 
 ## Model and limits
 
@@ -240,12 +263,20 @@ The dashboard polls a running run every second; it works unchanged through the d
 |---|---|
 | `GROQ_API_KEY` | required for AI features; never logged, never sent to the browser |
 | `AI_MODEL` | `openai/gpt-oss-120b` (strict JSON-schema output) |
-| `AI_FALLBACK_MODEL` | `openai/gpt-oss-20b`, used on rate limit or server error |
-| `AI_TIMEOUT_S` | 30 per model call, 90 per run |
-| `AI_DAILY_RUNS` / `AI_DAILY_TOKENS` | 50 runs / 200,000 tokens per tenant |
+| `AI_FALLBACK_MODEL` | `openai/gpt-oss-20b`, used after the main model failed twice |
+| `AI_REASONING_EFFORT` | `medium` |
+| `AI_MAX_OUTPUT_TOKENS` | 8192 (reasoning included) |
+| `AI_CALL_TIMEOUT_SECONDS` / `AI_RUN_TIMEOUT_SECONDS` | 30 per model call / 90 per run |
+| `AI_DAILY_RUNS` / `AI_DAILY_TOKENS` | 50 runs / 200,000 tokens per company per UTC day |
 
-Runs execute in the API process as background tasks (one API instance today). Nightly
-reports use an in-process scheduler at 02:00 IST; it moves to a worker if we scale out.
+Each model call: main model, main model again, then the fallback, on rate limits, server or
+connection errors, timeouts and answers that fail validation; a refused key, unknown model or
+other bad request stops at once. The answer is requested in Groq's strict JSON-schema mode
+(`app/ai/strict.py`: every property required, nullable = union with null,
+`additionalProperties: false`) and validated again with Pydantic, extra fields refused.
+One run at a time per person. Runs execute in the API process as background tasks (one API
+instance today); runs cut off by a restart are closed at startup. Nightly reports use an
+in-process scheduler at 02:00 IST; it moves to a worker if we scale out.
 
 ## Dashboard
 
@@ -258,19 +289,25 @@ reports use an in-process scheduler at 02:00 IST; it moves to a worker if we sca
 
 ## Testing
 
-- Unit tests run the graph with a **scripted fake model** (no network): routing, the
-  4-call limit, evidence checking, and every allow-list case including injection attempts.
-- Connector tests for `slow_queries`, `locks` and action execution against real MySQL and
-  PostgreSQL in CI, as for the existing collectors.
-- A small set of recorded scenarios (missing index, duplicate index, no primary key, lock
-  wait) checks that a real model run produces the expected finding; run by hand, not in CI.
+- `test_ai_llm.py` — the Groq client against a fake Groq API (httpx MockTransport): the exact
+  request (model, strict schema, key), retries, fallback, invalid answers, extra fields refused.
+- `test_ai_graph.py` — the graph with a **scripted fake model** (no network): routing, Explain
+  without planning, "Which table?", follow-ups, made-up evidence and tables dropped, unsafe SQL
+  stripped, partial and total failure, names that look like instructions.
+- `test_ai_verify.py` — every allowed statement shape per engine and the refused ones
+  (other statements, UNIQUE, comments, several statements, unknown tables, columns, indexes).
+- `test_ai_api.py` — the real runner, toolbox, Verifier and database with a fake connector
+  hub: answers, conversations, Explain, the table choice, offline connector, who may see what,
+  limits, and that every problem the dashboard shows can be explained.
+- Connector tests for `slow_queries` and `locks` run against real MySQL and PostgreSQL in CI.
+- A real Groq run is checked by hand (a key is never in CI).
 
 ## Build order
 
 | PR | Scope |
 |---|---|
 | **5.1** ✅ | Collectors `slow_queries`, `locks`, `table_index` (connector 0.6.0), migration 0006, table search (`find_tables`), Queries tab — everything the agents read, with no model involved yet |
-| **5.2** | Groq client with fallback, AI settings, tool layer and facts, LangGraph orchestrator + specialists + verifier, `agent_runs` + `findings` + conversations + `ai_usage_daily`, Explain button and Ask AI panel |
+| **5.2** ✅ | Groq client with retry and fallback, AI settings, facts, LangGraph orchestrator + specialists + Verifier, migration 0007 (`agent_runs`, `findings`, conversations, messages, `ai_usage_daily`), Explain buttons and the Ask AI panel |
 | **5.3** | `action_requests` + `action_approvals`, server signing key, connector executor and fix user, Fixes tab |
 | **5.4** | Nightly reports, Reports page, usage limits shown in Settings |
 | **5.5** | *Ask your data* (below) |
@@ -287,7 +324,8 @@ question → find_tables (table + period) → model reads column names only → 
          → connector runs it as the data reader user → results go only to the person's screen
 ```
 
-- **ZipZy tenant:** fixed by the server for the run (as for every tool); RLS in the metadata DB.
+- **ZipZy tenant:** fixed by the server for the run (as for every tool); every metadata query
+  filters by tenant.
 - **The customer's own tenant column** (e.g. `company_id`): when a table has one, the
   Verifier rejects a query without a filter on it; the person picks the value.
 - **Size:** at most 12 tables per query, `LIMIT 100`, 5 s timeout, read-only session.

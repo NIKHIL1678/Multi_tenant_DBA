@@ -45,6 +45,22 @@ class Settings(BaseSettings):
     connector_image: str = "ghcr.io/zipzy/dba-connector:0.1"
     enrollment_token_minutes: int = 60
 
+    # --- AI agents (Groq) ---------------------------------------------------------------
+    # Without a key the AI features are off; everything else works. Never logged or returned.
+    groq_api_key: SecretStr = SecretStr("")
+    ai_model: str = "openai/gpt-oss-120b"
+    ai_fallback_model: str = "openai/gpt-oss-20b"  # used when the main model fails twice
+    ai_reasoning_effort: Literal["low", "medium", "high"] = "medium"
+    ai_max_output_tokens: int = Field(default=8192, ge=512, le=65536)  # includes reasoning
+    ai_call_timeout_seconds: float = Field(default=30, gt=0, le=120)
+    ai_run_timeout_seconds: float = Field(default=90, gt=0, le=600)
+    ai_daily_runs: int = Field(default=50, ge=0)  # per company per day (UTC)
+    ai_daily_tokens: int = Field(default=200_000, ge=0)  # per company per day (UTC)
+
+    @property
+    def ai_enabled(self) -> bool:
+        return bool(self.groq_api_key.get_secret_value())
+
     @model_validator(mode="after")
     def _check_security(self) -> Self:
         if self.dev_auth and self.app_env not in ("development", "test"):

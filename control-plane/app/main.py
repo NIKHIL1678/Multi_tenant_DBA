@@ -7,7 +7,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from app.ai import runner as ai_runner
 from app.api import (
+    ai,
     audit_log,
     auth,
     collectors,
@@ -40,8 +42,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     # No connector link survives a restart: whoever was "online" must reconnect first.
     async with get_sessionmaker()() as session:
         reset = await gateway_service.reset_online_flags(session)
+        interrupted = await ai_runner.close_interrupted(session)
     if reset:
         logger.info("connectors marked offline at startup", extra={"count": reset})
+    if interrupted:
+        logger.info("agent runs closed at startup", extra={"count": interrupted})
     yield
     await get_engine().dispose()
     logger.info("shutdown")
@@ -84,6 +89,7 @@ def create_app() -> FastAPI:
     app.include_router(gateway.router)
     app.include_router(datasources.router)
     app.include_router(collectors.router)
+    app.include_router(ai.router)
     app.include_router(audit_log.router)
     if settings.dev_auth:
         app.include_router(dev.router)

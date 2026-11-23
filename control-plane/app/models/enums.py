@@ -69,3 +69,39 @@ class ActorType(StrEnum):
     AGENT = "agent"
     CONNECTOR = "connector"
     SYSTEM = "system"
+
+
+class AgentRunKind(StrEnum):
+    CHAT = "chat"  # a question typed in Ask AI
+    EXPLAIN = "explain"  # "Explain" on one problem of the server page
+
+
+class AgentRunStatus(StrEnum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    DONE = "done"
+    NEEDS_INPUT = "needs_input"  # ended with a question for the person (e.g. which table)
+    FAILED = "failed"
+
+
+class Specialist(StrEnum):
+    HEALTH = "health"  # connections, cache, uptime, locks, long transactions
+    QUERY = "query"  # slow statements, missing indexes for them
+    SCHEMA = "schema"  # tables, primary keys, duplicate / unused / invalid indexes
+
+
+class MessageRole(StrEnum):
+    USER = "user"
+    ASSISTANT = "assistant"
+
+
+class FindingSeverity(StrEnum):
+    HIGH = "high"
+    MEDIUM = "medium"
+    LOW = "low"
+
+
+class FindingStatus(StrEnum):
+    OPEN = "open"
+    RESOLVED = "resolved"
+    DISMISSED = "dismissed"

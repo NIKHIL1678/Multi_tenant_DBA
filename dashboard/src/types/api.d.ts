@@ -216,6 +216,57 @@ export interface paths {
         patch: operations["update_tenant_v1_tenants__tenant_id__patch"];
         trace?: never;
     };
+    "/v1/tenants/{tenant_id}/ai/conversations/{conversation_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Conversation */
+        get: operations["get_conversation_v1_tenants__tenant_id__ai_conversations__conversation_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/ai/runs/{run_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Run */
+        get: operations["get_run_v1_tenants__tenant_id__ai_runs__run_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/ai/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ai Status */
+        get: operations["ai_status_v1_tenants__tenant_id__ai_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenants/{tenant_id}/audit-log": {
         parameters: {
             query?: never;
@@ -337,6 +388,40 @@ export interface paths {
         head?: never;
         /** Move Datasource */
         patch: operations["move_datasource_v1_tenants__tenant_id__datasources__datasource_id__patch"];
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/ai/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Conversations */
+        get: operations["list_conversations_v1_tenants__tenant_id__datasources__datasource_id__ai_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/tenants/{tenant_id}/datasources/{datasource_id}/ai/runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start Run */
+        post: operations["start_run_v1_tenants__tenant_id__datasources__datasource_id__ai_runs_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/v1/tenants/{tenant_id}/datasources/{datasource_id}/check": {
@@ -579,11 +664,52 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** ActionOut */
+        ActionOut: {
+            /** Kind */
+            kind: string;
+            /** Reason */
+            reason: string;
+            /**
+             * Risk
+             * @enum {string}
+             */
+            risk: "low" | "medium" | "high";
+            /** Statement */
+            statement: string;
+            /** Table */
+            table: string | null;
+        };
         /**
          * ActorType
          * @enum {string}
          */
         ActorType: "user" | "agent" | "connector" | "system";
+        /**
+         * AgentRunKind
+         * @enum {string}
+         */
+        AgentRunKind: "chat" | "explain";
+        /**
+         * AgentRunStatus
+         * @enum {string}
+         */
+        AgentRunStatus: "queued" | "running" | "done" | "needs_input" | "failed";
+        /** AiStatusOut */
+        AiStatusOut: {
+            /** Enabled */
+            enabled: boolean;
+            /** Model */
+            model: string;
+            /** Runs Limit */
+            runs_limit: number;
+            /** Runs Today */
+            runs_today: number;
+            /** Tokens Limit */
+            tokens_limit: number;
+            /** Tokens Today */
+            tokens_today: number;
+        };
         /** AuditActorOut */
         AuditActorOut: {
             /** Email */
@@ -642,6 +768,20 @@ export interface components {
              * Format: date-time
              */
             updated_at: string;
+        };
+        /** Clarification */
+        Clarification: {
+            /** Options */
+            options: components["schemas"]["ClarifyOption"][];
+            /** Question */
+            question: string;
+        };
+        /** ClarifyOption */
+        ClarifyOption: {
+            /** Label */
+            label: string;
+            /** Table */
+            table: string;
         };
         /** CollectError */
         CollectError: {
@@ -740,6 +880,58 @@ export interface components {
         ConnectorUpdateIn: {
             /** Name */
             name: string;
+        };
+        /** ConversationDetailOut */
+        ConversationDetailOut: {
+            /** Context */
+            context: {
+                [key: string]: string;
+            };
+            /**
+             * Datasource Id
+             * Format: uuid
+             */
+            datasource_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Messages */
+            messages: components["schemas"]["MessageOut"][];
+            /** Runs */
+            runs: components["schemas"]["RunOut"][];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /** ConversationOut */
+        ConversationOut: {
+            /** Context */
+            context: {
+                [key: string]: string;
+            };
+            /**
+             * Datasource Id
+             * Format: uuid
+             */
+            datasource_id: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
         };
         /** DatasourceCatalogOut */
         DatasourceCatalogOut: {
@@ -918,6 +1110,39 @@ export interface components {
             is_production?: boolean | null;
             /** Name */
             name?: string | null;
+        };
+        /** EvidenceOut */
+        EvidenceOut: {
+            /** Id */
+            id: string;
+            /** Summary */
+            summary: string;
+        };
+        /** FindingOut */
+        FindingOut: {
+            action: components["schemas"]["ActionOut"] | null;
+            /** Category */
+            category: string;
+            /** Evidence */
+            evidence: components["schemas"]["EvidenceOut"][];
+            /** Explanation */
+            explanation: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Severity
+             * @enum {string}
+             */
+            severity: "high" | "medium" | "low";
+            /** Specialist */
+            specialist: string;
+            /** Table */
+            table: string | null;
+            /** Title */
+            title: string;
         };
         /** FullScan */
         FullScan: {
@@ -1289,6 +1514,29 @@ export interface components {
             /** Tenant Slug */
             tenant_slug: string;
         };
+        /** MessageOut */
+        MessageOut: {
+            /** Content */
+            content: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            role: components["schemas"]["MessageRole"];
+            /** Run Id */
+            run_id: string | null;
+        };
+        /**
+         * MessageRole
+         * @enum {string}
+         */
+        MessageRole: "user" | "assistant";
         /** MissingPrimaryKey */
         MissingPrimaryKey: {
             /** Rows */
@@ -1368,6 +1616,63 @@ export interface components {
             name: string;
         };
         /**
+         * RunIn
+         * @description chat: `message` (and `conversation_id` to continue one), or `table` to answer
+         *     "Which table do you mean?" in that conversation. explain: `problem` (+ its title).
+         */
+        RunIn: {
+            /** Conversation Id */
+            conversation_id?: string | null;
+            kind: components["schemas"]["AgentRunKind"];
+            /** Message */
+            message?: string | null;
+            /** Problem */
+            problem?: string | null;
+            /** Problem Title */
+            problem_title?: string | null;
+            /** Table */
+            table?: string | null;
+        };
+        /** RunOut */
+        RunOut: {
+            /** Answer */
+            answer: string | null;
+            clarification: components["schemas"]["Clarification"] | null;
+            /** Conversation Id */
+            conversation_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Datasource Id
+             * Format: uuid
+             */
+            datasource_id: string;
+            /** Error */
+            error: string | null;
+            /** Findings */
+            findings: components["schemas"]["FindingOut"][];
+            /** Finished At */
+            finished_at: string | null;
+            /** Follow Ups */
+            follow_ups: string[];
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            kind: components["schemas"]["AgentRunKind"];
+            /** Notes */
+            notes: string[];
+            /** Question */
+            question: string;
+            status: components["schemas"]["AgentRunStatus"];
+            /** Steps */
+            steps: components["schemas"]["Step"][];
+        };
+        /**
          * ServerSnapshotsOut
          * @description The latest answer of each collector for one datasource (None: never collected).
          */
@@ -1427,6 +1732,13 @@ export interface components {
              */
             collected_at: string;
             data: components["schemas"]["SlowQueriesData"];
+        };
+        /** Step */
+        Step: {
+            /** Key */
+            key: string;
+            /** Label */
+            label: string;
         };
         /** TableRow */
         TableRow: {
@@ -2036,6 +2348,110 @@ export interface operations {
             };
         };
     };
+    get_conversation_v1_tenants__tenant_id__ai_conversations__conversation_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationDetailOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_run_v1_tenants__tenant_id__ai_runs__run_id__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                run_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_status_v1_tenants__tenant_id__ai_status_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AiStatusOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_audit_log_v1_tenants__tenant_id__audit_log_get: {
         parameters: {
             query?: {
@@ -2429,6 +2845,80 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["DatasourceOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_conversations_v1_tenants__tenant_id__datasources__datasource_id__ai_conversations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                datasource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_run_v1_tenants__tenant_id__datasources__datasource_id__ai_runs_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+                datasource_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RunIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RunOut"];
                 };
             };
             /** @description Validation Error */

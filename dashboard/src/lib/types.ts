@@ -36,3 +36,11 @@ export type AuditEntry = Schemas['AuditEntryOut']
 export type AuditPage = Schemas['Page_AuditEntryOut_']
 export type InvitationPreview = Schemas['InvitationPreviewOut']
 export type InvitationAccepted = Schemas['InvitationAcceptedOut']
+
+// AI agents (Ask AI, Explain)
+export type AiStatus = Schemas['AiStatusOut']
+export type AgentRun = Schemas['RunOut']
+export type AgentRunIn = Schemas['RunIn']
+export type AgentFinding = Schemas['FindingOut']
+export type AiConversation = Schemas['ConversationOut']
+export type AiConversationDetail = Schemas['ConversationDetailOut']

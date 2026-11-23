@@ -1,8 +1,8 @@
-import { AlertTriangle, ArrowRight, CheckCircle2, Info } from 'lucide-react'
+import { AlertTriangle, ArrowRight, CheckCircle2, Info, Sparkles } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
-import { attentionItems, type ServerTab } from '@/features/datasources/server/attention'
+import { attentionItems, type AttentionItem, type ServerTab } from '@/features/datasources/server/attention'
 import { Metric, QualifiedName } from '@/features/datasources/server/parts'
 import { formatBytes, formatCompact, formatDuration, formatPercent } from '@/lib/format'
 import type { Datasource, ServerSnapshots } from '@/lib/types'
@@ -11,10 +11,13 @@ export function OverviewTab({
   datasource: d,
   snapshots: s,
   onTab,
+  onExplain,
 }: {
   datasource: Datasource
   snapshots: ServerSnapshots
   onTab: (tab: ServerTab) => void
+  /** Ask the AI agents to explain one problem (not offered when AI cannot look at this engine). */
+  onExplain?: (item: AttentionItem) => void
 }) {
   const h = s.health?.data
   const items = attentionItems(s)
@@ -83,12 +86,20 @@ export function OverviewTab({
                     <p className="text-sm font-medium">{item.title}</p>
                     {item.detail && <p className="mt-0.5 text-sm text-muted-foreground">{item.detail}</p>}
                   </div>
-                  {item.tab && (
-                    <Button variant="ghost" size="sm" className="shrink-0" onClick={() => onTab(item.tab!)}>
-                      View
-                      <ArrowRight />
-                    </Button>
-                  )}
+                  <div className="flex shrink-0 flex-col items-end gap-1 sm:flex-row">
+                    {onExplain && (
+                      <Button variant="ghost" size="sm" onClick={() => onExplain(item)} aria-label={`Explain: ${item.title}`}>
+                        <Sparkles />
+                        Explain
+                      </Button>
+                    )}
+                    {item.tab && (
+                      <Button variant="ghost" size="sm" onClick={() => onTab(item.tab!)}>
+                        View
+                        <ArrowRight />
+                      </Button>
+                    )}
+                  </div>
                 </li>
               )
             })}
