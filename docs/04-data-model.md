@@ -411,6 +411,74 @@ new one is stored; `table_index` keeps only its latest row (it can be a few MB).
 that ran less than 30 s ago (10 min for `table_index`) is not asked again.
 Migrations: 0005 (table), 0006 (`slow_queries`, `locks`, `table_index`).
 
+### AI agents (migration 0007)
+
+Every row has `tenant_id`; rows go with their datasource (ON DELETE CASCADE). No customer
+table rows are stored: only statistics, structure, normalized statement text and what the
+agents wrote about them. See [08 AI agents](08-ai-agents.md).
+
+**ai_conversations** — one person's chat about one datasource
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| tenant_id | UUID FK → tenants | |
+| datasource_id | UUID FK → datasources ON DELETE CASCADE | |
+| user_id | UUID FK → users | Private to this person |
+| title | TEXT NOT NULL | First question or the explained problem |
+| context | JSONB NOT NULL DEFAULT '{}' | What it is about: `{"table": "hrm.attendance_*", "period": "2026-11"}` |
+| created_at, updated_at | TIMESTAMPTZ | |
+
+Index `(datasource_id, user_id, updated_at)`.
+
+**ai_messages** — `id`, `tenant_id`, `conversation_id` (FK ON DELETE CASCADE), `role`
+(`user` \| `assistant`, CHECK), `content` TEXT, `run_id` (FK → agent_runs ON DELETE SET NULL),
+`created_at`. Index `(conversation_id, created_at)`.
+
+**agent_runs** — one run of the agent graph
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| tenant_id, datasource_id, user_id, conversation_id | UUID FKs | datasource and conversation ON DELETE CASCADE |
+| kind | TEXT | `chat` \| `explain` (CHECK) |
+| status | TEXT | `queued` \| `running` \| `done` \| `needs_input` \| `failed` (CHECK) |
+| question | TEXT | What the agents were asked |
+| problem | TEXT NULL | Explain: the problem id from the server page |
+| steps | JSONB | Progress shown while it runs: `[{key, label}]` |
+| answer | TEXT NULL | The reply |
+| follow_ups | JSONB | Up to 3 suggested next questions |
+| clarification | JSONB NULL | `{question, options: [{label, table}]}` when it ended asking |
+| notes | JSONB | What could not be checked, and why |
+| error | TEXT NULL | Why it failed, in words a person can act on |
+| model | TEXT NULL | Model(s) that answered |
+| input_tokens, output_tokens | INTEGER | As reported by Groq |
+| created_at, finished_at | TIMESTAMPTZ | |
+
+Indexes `(user_id, status)` (one active run per person) and `(datasource_id, created_at)`.
+
+**findings** — verified findings of a run
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| tenant_id, datasource_id, run_id | UUID FKs | datasource and run ON DELETE CASCADE |
+| specialist | TEXT | `health` \| `query` \| `schema` |
+| severity | TEXT | `high` \| `medium` \| `low` (CHECK) |
+| category | TEXT | e.g. `missing_index`, `duplicate_index`, `lock_wait` |
+| title, explanation | TEXT | |
+| evidence | JSONB | `[{id: "Q1", summary: "…"}]`, every id checked to exist |
+| table_name | TEXT NULL | `schema.table`, checked to exist |
+| action | JSONB NULL | Suggested statement that passed the allow-list: `{kind, statement, table, reason, risk}` |
+| fingerprint | TEXT | Same problem across runs (category + table) |
+| status | TEXT | `open` \| `resolved` \| `dismissed` (CHECK), default `open` |
+| created_at | TIMESTAMPTZ | |
+
+Indexes `(datasource_id, status, created_at)` and `(run_id)`.
+
+**ai_usage_daily** — `(tenant_id, day)` PK, `runs`, `input_tokens`, `output_tokens`: for the
+daily limits (`AI_DAILY_RUNS`, `AI_DAILY_TOKENS`).
+
 ### audit_log — append-only record of everything
 
 Column

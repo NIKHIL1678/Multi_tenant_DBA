@@ -289,6 +289,34 @@ def _has_period(c: Candidate, period: str) -> bool:
     return any(t.period and t.period.startswith(period) for t in c.tables)
 
 
+def match_named(
+    index: TableIndexData,
+    name: str,
+    *,
+    period: str | None = None,
+    candidates: list[Candidate] | None = None,
+) -> Match | None:
+    """The table or family called exactly `name` ("hrm.attendance" or "hrm.attendance_*"), as
+    chosen earlier in a conversation; None when it is no longer there."""
+    wanted = name.strip().lower()
+    for c in candidates if candidates is not None else build_candidates(index):
+        if f"{c.schema}.{c.name}".lower() == wanted:
+            tables, _ = _members(c, period)
+            dated = [t.period for t in c.tables if t.period]
+            return Match(
+                kind=c.kind,
+                schema=c.schema,
+                name=c.name,
+                score=1.0,
+                rows=c.rows,
+                bytes=c.bytes,
+                table_count=len(c.tables),
+                periods=(dated[0], dated[-1]) if c.kind == "family" and dated else None,
+                tables=tables,
+            )
+    return None
+
+
 # ---- loading the index -----------------------------------------------------------------------
 
 
@@ -342,3 +370,11 @@ async def find_tables(
     """
     index, candidates = await load_index(session, datasource_id)
     return search(index, query, schema=schema, period=period, limit=limit, candidates=candidates)
+
+
+async def find_named(
+    session: AsyncSession, datasource_id: uuid.UUID, name: str, *, period: str | None = None
+) -> Match | None:
+    """match_named on the datasource's latest table index (raises NoTableIndexError)."""
+    index, candidates = await load_index(session, datasource_id)
+    return match_named(index, name, period=period, candidates=candidates)

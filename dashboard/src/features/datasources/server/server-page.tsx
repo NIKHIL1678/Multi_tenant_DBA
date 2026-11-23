@@ -1,5 +1,5 @@
-import { ArrowLeft, Database, RefreshCw, SearchX, Unplug } from 'lucide-react'
-import { useEffect, useRef } from 'react'
+import { ArrowLeft, Database, RefreshCw, SearchX, Sparkles, Unplug } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
 import { EmptyState } from '@/components/empty-state'
@@ -8,6 +8,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { TabCount, Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { AiPanel, type ExplainRequest } from '@/features/ai/ai-panel'
 import { useCollect, useDatasource, useSnapshots } from '@/features/datasources/api'
 import { DatasourceStatusBadge, EngineBadge, EnvironmentTag } from '@/features/datasources/datasource-badges'
 import { ServerDatabaseList } from '@/features/datasources/server-databases-sheet'
@@ -74,6 +75,13 @@ function Server({ tenantId, datasource: d }: { tenantId: string; datasource: Dat
       },
       { replace: true },
     )
+
+  const [aiOpen, setAiOpen] = useState(false)
+  const [explain, setExplain] = useState<ExplainRequest | null>(null)
+  const askAi = (request?: Omit<ExplainRequest, 'nonce'>) => {
+    if (request) setExplain({ ...request, nonce: Date.now() })
+    setAiOpen(true)
+  }
 
   const online = d.connector.status === 'online'
   const supported = SUPPORTED.has(d.engine)
@@ -150,15 +158,23 @@ function Server({ tenantId, datasource: d }: { tenantId: string; datasource: Dat
           </div>
         </div>
         <div className="flex shrink-0 flex-col items-start gap-1 sm:items-end">
-          <Button
-            variant="outline"
-            onClick={() => collect.mutate(undefined)}
-            disabled={collect.isPending || !online || !supported}
-            title={!online ? `Connector ${d.connector.name} is offline` : undefined}
-          >
-            <RefreshCw className={collect.isPending ? 'animate-spin' : undefined} />
-            {collect.isPending ? 'Collecting…' : 'Collect now'}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {supported && (
+              <Button onClick={() => askAi()}>
+                <Sparkles />
+                Ask AI
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => collect.mutate(undefined)}
+              disabled={collect.isPending || !online || !supported}
+              title={!online ? `Connector ${d.connector.name} is offline` : undefined}
+            >
+              <RefreshCw className={collect.isPending ? 'animate-spin' : undefined} />
+              {collect.isPending ? 'Collecting…' : 'Collect now'}
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground" title={newest ? formatDateTime(newest) : undefined}>
             {newest
               ? `Collected ${formatRelative(missing || !oldest ? newest : oldest, now)}`
@@ -211,7 +227,12 @@ function Server({ tenantId, datasource: d }: { tenantId: string; datasource: Dat
           <>
             <TabsContent value="overview">
               {data.health || data.table_stats || data.indexes ? (
-                <OverviewTab datasource={d} snapshots={data} onTab={setTab} />
+                <OverviewTab
+                  datasource={d}
+                  snapshots={data}
+                  onTab={setTab}
+                  onExplain={supported ? (item) => askAi({ problem: item.id, title: item.title }) : undefined}
+                />
               ) : (
                 notCollected('statistics')
               )}
@@ -241,6 +262,7 @@ function Server({ tenantId, datasource: d }: { tenantId: string; datasource: Dat
           </>
         )}
       </Tabs>
+      <AiPanel tenantId={tenantId} datasource={d} open={aiOpen} onOpenChange={setAiOpen} explain={explain} />
     </>
   )
 }

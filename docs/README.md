@@ -29,6 +29,7 @@ rejected. ADRs are never edited after acceptance; a new ADR supersedes an old on
 | [0004](adr/0004-rbac-model.md) | Permission-based RBAC with environment overrides | Accepted |
 | [0005](adr/0005-read-only-by-default.md) | Read-only by default; writes need human approval | Accepted |
 | [0006](adr/0006-ai-orchestration.md) | Supervisor + specialist agents on LangGraph and Groq | Accepted |
+| [0007](adr/0007-code-fetches-ai-analyses.md) | Code fetches the data; specialist agents only analyse it | Accepted |
 
 New significant decision → copy [adr/0000-template.md](adr/0000-template.md).
 
