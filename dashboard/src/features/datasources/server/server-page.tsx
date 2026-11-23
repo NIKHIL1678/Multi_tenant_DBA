@@ -1,4 +1,4 @@
-import { ArrowLeft, Database, RefreshCw, SearchX } from 'lucide-react'
+import { ArrowLeft, Database, RefreshCw, SearchX, Unplug } from 'lucide-react'
 import { useEffect, useRef } from 'react'
 import { Link, useParams, useSearchParams } from 'react-router'
 
@@ -14,6 +14,7 @@ import { ServerDatabaseList } from '@/features/datasources/server-databases-shee
 import { attentionItems, type ServerTab } from '@/features/datasources/server/attention'
 import { IndexesTab } from '@/features/datasources/server/indexes-tab'
 import { OverviewTab } from '@/features/datasources/server/overview-tab'
+import { QueriesTab } from '@/features/datasources/server/queries-tab'
 import { TablesTab } from '@/features/datasources/server/tables-tab'
 import { describeError, isNotFound } from '@/lib/api'
 import { formatDateTime, formatRelative } from '@/lib/format'
@@ -21,11 +22,11 @@ import { useTenant } from '@/lib/tenant-context'
 import type { Datasource, ServerSnapshots } from '@/lib/types'
 import { useNow } from '@/lib/use-now'
 
-const TABS: ServerTab[] = ['overview', 'databases', 'tables', 'indexes']
+const TABS: ServerTab[] = ['overview', 'databases', 'tables', 'indexes', 'queries']
 const SUPPORTED = new Set(['postgres', 'mysql', 'mariadb'])
 const STALE_AFTER_MS = 15 * 60_000 // opening the page refreshes statistics older than this
 
-/** Newest and oldest collection time across the collectors that have run. */
+/** Newest and oldest collection time across the collectors every connector version has. */
 function collectedTimes(s: ServerSnapshots | undefined): { newest?: string; oldest?: string; missing: boolean } {
   const times = [s?.health, s?.table_stats, s?.indexes].map((x) => x?.collected_at)
   const known = times.filter((t): t is string => !!t).sort()
@@ -91,7 +92,12 @@ function Server({ tenantId, datasource: d }: { tenantId: string; datasource: Dat
   }, [snapshots.data, online, supported, collect])
 
   const errors = collect.data?.errors ?? []
-  const problems = attentionItems(data).filter((i) => i.tab === 'indexes').length
+  const attention = attentionItems(data)
+  const problems = attention.filter((i) => i.tab === 'indexes').length
+  const queryProblems = attention.filter((i) => i.tab === 'queries' && i.level === 'warning').length
+  const outdated = errors.find(
+    (e) => (e.collector === 'slow_queries' || e.collector === 'locks') && e.code === 'outdated_connector',
+  )
 
   const notCollected = (what: string) =>
     collect.isPending ? (
@@ -192,6 +198,9 @@ function Server({ tenantId, datasource: d }: { tenantId: string; datasource: Dat
           <TabsTrigger value="indexes">
             Indexes <TabCount>{data?.indexes ? problems || undefined : undefined}</TabCount>
           </TabsTrigger>
+          <TabsTrigger value="queries">
+            Queries <TabCount>{queryProblems || undefined}</TabCount>
+          </TabsTrigger>
         </TabsList>
 
         {snapshots.isError ? (
@@ -216,6 +225,19 @@ function Server({ tenantId, datasource: d }: { tenantId: string; datasource: Dat
             <TabsContent value="indexes">
               {data.indexes ? <IndexesTab data={data.indexes.data} /> : notCollected('index statistics')}
             </TabsContent>
+            <TabsContent value="queries">
+              {data.slow_queries || data.locks ? (
+                <QueriesTab slow={data.slow_queries?.data} locks={data.locks?.data} />
+              ) : outdated ? (
+                <EmptyState
+                  icon={Unplug}
+                  title="Update the connector to see queries and locks"
+                  description={`${outdated.message} Download it again from Connectors, or pull the new Docker image, and restart it.`}
+                />
+              ) : (
+                notCollected('query statistics')
+              )}
+            </TabsContent>
           </>
         )}
       </Tabs>
@@ -227,6 +249,9 @@ const COLLECTOR_LABELS: Record<string, string> = {
   health: 'Health',
   table_stats: 'Tables',
   indexes: 'Indexes',
+  slow_queries: 'Slow queries',
+  locks: 'Locks',
+  table_index: 'Table list',
 }
 
 function PageSkeleton({ tabsOnly = false }: { tabsOnly?: boolean }) {

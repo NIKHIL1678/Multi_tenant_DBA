@@ -47,7 +47,7 @@ export function IndexesTab({ data }: { data: IndexesData }) {
           icon={ScanSearch}
           title="Big tables read in full"
           count={data.full_scans.length}
-          why="Queries read these tables row by row. A missing index is the usual cause; slow queries (next update) show which."
+          why="Queries read these tables row by row. A missing index is the usual cause; the Queries tab shows which statements."
         >
           {data.full_scans.map((f) => (
             <FindingRow

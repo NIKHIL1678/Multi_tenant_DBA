@@ -392,6 +392,25 @@ TIMESTAMPTZ
 
 Index `(tenant_id, environment_id)`.
 
+### snapshots — what collectors found on a datasource
+
+One row per collector run: statistics and metadata only, never table rows. Removed with
+the datasource.
+
+| Column | Type | Notes |
+|---|---|---|
+| id | UUID PK | |
+| tenant_id | UUID FK → tenants | |
+| datasource_id | UUID FK → datasources ON DELETE CASCADE | |
+| collector | TEXT NOT NULL | `health` \| `table_stats` \| `indexes` \| `slow_queries` \| `locks` \| `table_index` (CHECK) |
+| data | JSONB NOT NULL | The connector's answer after validation (`app/schemas/snapshots.py`) |
+| collected_at | TIMESTAMPTZ NOT NULL | |
+
+Index `(datasource_id, collector, collected_at)`. Rows older than 30 days are deleted when a
+new one is stored; `table_index` keeps only its latest row (it can be a few MB). A collector
+that ran less than 30 s ago (10 min for `table_index`) is not asked again.
+Migrations: 0005 (table), 0006 (`slow_queries`, `locks`, `table_index`).
+
 ### audit_log — append-only record of everything
 
 Column

@@ -16,11 +16,13 @@ Database passwords never leave the server it runs on.
    its key, and reports its databases (they appear in ZipZy by themselves). It answers ZipZy's
    pings, re-checks every database every 5 minutes, and runs **allow-listed, read-only tools**
    on request. Nothing can make it run SQL sent from outside.
+4. **Reconnect** by itself after network trouble or a ZipZy restart (1 s → 60 s pauses). It stops
+   only when the connector is **revoked** in ZipZy or its key is refused (exit code 2).
 
 ## Tools ZipZy may ask for
 
 Each is a fixed, read-only set of queries with a 5 s limit per statement and 30 s overall. None
-reads table rows; at most a few hundred items come back.
+reads table rows, and every answer has a size limit.
 
 | Tool | Answers | Reads |
 |---|---|---|
@@ -28,11 +30,18 @@ reads table rows; at most a few hundred items come back.
 | `health` | is the server OK? connections, cache hit rate, replication lag | server status counters, a few settings |
 | `table_stats` | biggest tables: rows, data and index size, scans, primary key | table statistics |
 | `indexes` | unused, duplicate and missing indexes; tables without a primary key; heavy full scans | index definitions and usage counters |
+| `slow_queries` | the 20 statements that took the most time: calls, average and worst time, rows read | statement statistics, with every value replaced by `?` / `$1` |
+| `locks` | who is waiting for a lock and who holds it; transactions open longer than 60 s | session ids, users, tables, timings (never the statements) |
+| `table_index` | every table's name, rows and size, biggest first (up to 50,000), to find one among thousands | table catalog |
+
+`slow_queries` and `locks` never send statement text with values in it: MySQL and
+`pg_stat_statements` store statements with every literal replaced, utility statements (which may
+keep literals) are skipped, and `locks` reads no statement text at all. When the server cannot
+answer (performance_schema off, `pg_stat_statements` missing, MariaDB without lock tables) the
+tool says why instead of failing.
 
 Usage counters start again when the database server restarts, so "unused" means "not used since
 then". On Postgres, table and index details cover the database named in `connector.yaml`.
-4. **Reconnect** by itself after network trouble or a ZipZy restart (1 s → 60 s pauses). It stops
-   only when the connector is **revoked** in ZipZy or its key is refused (exit code 2).
 
 ## Windows: one file, no setup
 
@@ -54,8 +63,11 @@ PostgreSQL:
 ```sql
 CREATE ROLE zipzy_monitor LOGIN PASSWORD '...';
 GRANT pg_monitor TO zipzy_monitor;
--- optional, for slow-query analysis:  CREATE EXTENSION pg_stat_statements;
 ```
+
+For slow queries on PostgreSQL, also add `pg_stat_statements` to `shared_preload_libraries`,
+restart, and run `CREATE EXTENSION pg_stat_statements;` in the database named in
+`connector.yaml` (`pg_monitor` already lets the monitoring user read it).
 
 MySQL / MariaDB:
 ```sql
@@ -68,7 +80,7 @@ What each grant allows (none of them reads or changes table rows):
 
 | Grant | Lets ZipZy see |
 |---|---|
-| `PROCESS` | running queries and locks |
+| `PROCESS` | open transactions and lock waits |
 | `REPLICATION CLIENT` | replication status |
 | `SHOW DATABASES` | the name of every database on the server |
 | `SHOW VIEW` | table sizes and indexes (and view definitions) |

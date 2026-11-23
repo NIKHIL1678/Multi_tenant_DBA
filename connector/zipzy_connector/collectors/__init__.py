@@ -3,9 +3,13 @@
     health        is the server OK right now?          (connections, cache, replication)
     table_stats   which tables are big or growing?     (rows, sizes, scans, primary keys)
     indexes       which indexes are unused, duplicated or missing?
+    slow_queries  which statements take the most time?    (normalized text: values become ?/$1)
+    locks         who is waiting for whom right now? which transactions stay open too long?
+    table_index   every table's name, rows and size        (to find a table among thousands)
 
 Each runs in a read-only session with a 5 s limit per statement and a 30 s limit overall,
-returns at most a few hundred items, and never reads table rows. Adding one = a function per
+returns a bounded answer, and never reads table rows. A server that cannot answer (feature off,
+too old) returns {"available": false, "reason": ...} instead of failing. Adding one = a function per
 engine + one line in COLLECTORS + the name on both allow-lists (here and in ZipZy).
 """
 
@@ -30,6 +34,17 @@ COLLECTORS: dict[str, dict[str, Collector]] = {
         "mariadb": mysql.table_stats,
     },
     "indexes": {"postgres": postgres.indexes, "mysql": mysql.indexes, "mariadb": mysql.indexes},
+    "slow_queries": {
+        "postgres": postgres.slow_queries,
+        "mysql": mysql.slow_queries,
+        "mariadb": mysql.slow_queries,
+    },
+    "locks": {"postgres": postgres.locks, "mysql": mysql.locks, "mariadb": mysql.locks},
+    "table_index": {
+        "postgres": postgres.table_index,
+        "mysql": mysql.table_index,
+        "mariadb": mysql.table_index,
+    },
 }
 
 

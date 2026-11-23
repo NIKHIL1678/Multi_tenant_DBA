@@ -1,16 +1,17 @@
 """Collectors through the API: who may run them, what is stored, how failures are reported.
 
-The hub is replaced by a fake that answers like a 0.4.0 connector (the real link is covered in
+The hub is replaced by a fake that answers like a 0.6.0 connector (the real link is covered in
 test_gateway.py and on the connector side).
 """
 
+import re
 import uuid
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import pytest
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.gateway.hub import ConnectorHub, RequestTimeoutError, ToolFailedError, get_hub
@@ -92,17 +93,82 @@ INDEXES = {
     ],
     "missing_primary_keys": [{"schema": "zipzy_hrm", "table": "audit_log", "rows": 10}],
 }
+SLOW: dict[str, Any] = {
+    "available": True,
+    "reason": None,
+    "since": "2026-11-20T00:00:00+00:00",
+    "total_statements": 41,
+    "queries": [
+        {
+            "id": "d41d8cd9",
+            "database": "zipzy_hrm",
+            "text": "SELECT * FROM `attendance` WHERE `emp_id` = ? AND `day` = ?",
+            "calls": 412,
+            "total_ms": 98_000.5,
+            "mean_ms": 237.9,
+            "max_ms": 1200.0,
+            "rows_returned": 412,
+            "rows_examined": 82_400_000,
+            "no_index_used": 412,
+            "tmp_disk_tables": 0,
+            "disk_blocks_read": None,
+        }
+    ],
+}
+LOCKS: dict[str, Any] = {
+    "available": True,
+    "reason": None,
+    "long_transaction_seconds": 60,
+    "waits": [
+        {
+            "waiting_session": 31,
+            "wait_seconds": 12,
+            "blocking_session": 27,
+            "blocker_transaction_seconds": 340,
+            "blocker_state": "RUNNING",
+            "schema": "zipzy_hrm",
+            "table": "attendance",
+            "index": "PRIMARY",
+            "lock_mode": "X,REC_NOT_GAP",
+        }
+    ],
+    "long_transactions": [
+        {"session": 27, "seconds": 340, "state": "RUNNING", "user": "app", "database": "zipzy_hrm"}
+    ],
+}
+TABLE_INDEX: dict[str, Any] = {
+    "available": True,
+    "reason": None,
+    "total_tables": 3,
+    "listed_tables": 3,
+    "truncated": False,
+    "schemas": [
+        {
+            "name": "zipzy_hrm",
+            "tables": [
+                ["attendance_2026_10", 1000, 65536],
+                ["attendance_2026_11", 900, 65536],
+                ["employees", 50, None],
+            ],
+        }
+    ],
+}
+ANSWERS: dict[str, Any] = {
+    "health": HEALTH,
+    "table_stats": TABLES,
+    "indexes": INDEXES,
+    "slow_queries": SLOW,
+    "locks": LOCKS,
+    "table_index": TABLE_INDEX,
+}
+PAGE = ["health", "indexes", "locks", "slow_queries", "table_stats"]
 
 
 class FakeHub:
     """Answers like a connector; records what was asked."""
 
     def __init__(self, answers: dict[str, Any] | None = None, *, online: bool = True) -> None:
-        self.answers: dict[str, Any] = answers or {
-            "health": HEALTH,
-            "table_stats": TABLES,
-            "indexes": INDEXES,
-        }
+        self.answers: dict[str, Any] = {**ANSWERS, **(answers or {})}
         self.online = online
         self.calls: list[tuple[str, dict[str, Any]]] = []
 
@@ -146,6 +212,8 @@ async def test_viewer_collects_and_reads_the_latest(
         "health": None,
         "table_stats": None,
         "indexes": None,
+        "slow_queries": None,
+        "locks": None,
         "errors": [],
     }
 
@@ -157,7 +225,10 @@ async def test_viewer_collects_and_reads_the_latest(
     assert "some_future_field" not in body["health"]["data"]
     assert body["table_stats"]["data"]["tables"][0]["schema"] == "zipzy_hrm"
     assert body["indexes"]["data"]["duplicates"][0]["covered_by"] == "by_status_date"
-    assert sorted(t for t, _ in hub.calls) == ["health", "indexes", "table_stats"]
+    assert body["slow_queries"]["data"]["queries"][0]["no_index_used"] == 412
+    assert body["locks"]["data"]["waits"][0]["schema"] == "zipzy_hrm"
+    assert "table_index" not in body, "the table index is for search, not for the page"
+    assert sorted(t for t, _ in hub.calls) == PAGE
     assert all(args == {"datasource": ds.local_name} for _, args in hub.calls)
 
     again = await api.get(url(w.t, f"/{ds.id}/snapshots"), headers=hdr(viewer))
@@ -170,7 +241,7 @@ async def test_recent_answers_are_reused(api: AsyncClient, db: AsyncSession, use
     path = url(w.t, f"/{w.my_staging.id}/collect")
     await api.post(path, headers=hdr(w.owner))
     await api.post(path, headers=hdr(w.owner), json={"collectors": ["health", "health"]})
-    assert len(hub.calls) == 3, "a second click within 30 s does not ask the database again"
+    assert len(hub.calls) == 5, "a second click within 30 s does not ask the database again"
 
 
 async def test_failures_are_per_collector(api: AsyncClient, db: AsyncSession, use_hub: Any) -> None:
@@ -248,7 +319,7 @@ async def test_old_snapshots_expire_and_go_with_the_datasource(db: AsyncSession)
     await svc.store(db, ds, Collector.INDEXES, INDEXES)
     rows = (await db.scalars(select(Snapshot).where(Snapshot.datasource_id == ds.id))).all()
     assert old not in rows and len(rows) == 2
-    assert set(await svc.latest(db, ds.id)) == {Collector.HEALTH, Collector.INDEXES}
+    assert set(await svc.latest(db, ds.id, Collector)) == {Collector.HEALTH, Collector.INDEXES}
 
     await db.delete(ds)
     await db.flush()
@@ -259,6 +330,100 @@ async def test_old_snapshots_expire_and_go_with_the_datasource(db: AsyncSession)
 
 
 async def test_only_allow_listed_tools_can_be_requested() -> None:
-    assert {"probe", "health", "table_stats", "indexes"} == set(ALLOWED_TOOLS)
+    assert {"probe", *ANSWERS} == set(ALLOWED_TOOLS)
     with pytest.raises(ValueError, match="not allowed"):
         await ConnectorHub().request(uuid.uuid4(), "run_sql", {"sql": "drop table x"})
+
+
+async def test_new_collectors_on_an_older_connector(
+    api: AsyncClient, db: AsyncSession, use_hub: Any
+) -> None:
+    w = await world(db)
+    old = ToolFailedError("unknown_tool", "this connector version does not offer it")
+    use_hub(FakeHub({"slow_queries": old, "locks": old}))
+    r = await api.post(url(w.t, f"/{w.my_staging.id}/collect"), headers=hdr(w.owner))
+    body = r.json()
+    assert body["health"] is not None and body["slow_queries"] is None
+    assert {e["collector"]: e["code"] for e in body["errors"]} == {
+        "slow_queries": "outdated_connector",
+        "locks": "outdated_connector",
+    }
+    assert all("0.6.0" in e["message"] for e in body["errors"])
+
+
+async def test_a_server_that_cannot_answer_says_why(
+    api: AsyncClient, db: AsyncSession, use_hub: Any
+) -> None:
+    w = await world(db)
+    reason = "pg_stat_statements is not installed."
+    use_hub(FakeHub({"slow_queries": {"available": False, "reason": reason}}))
+    r = await api.post(
+        url(w.t, f"/{w.my_staging.id}/collect"),
+        headers=hdr(w.owner),
+        json={"collectors": ["slow_queries"]},
+    )
+    assert r.json()["errors"] == []
+    assert r.json()["slow_queries"]["data"] == {
+        "available": False,
+        "reason": reason,
+        "since": None,
+        "total_statements": 0,
+        "queries": [],
+    }
+
+
+async def test_table_index_is_collected_on_request_and_kept_once(
+    api: AsyncClient, db: AsyncSession, use_hub: Any
+) -> None:
+    w = await world(db)
+    ds = w.my_staging
+    viewer, _ = await member(db, w.t, R.VIEWER)
+    hub = use_hub(FakeHub())
+    path = url(w.t, f"/{ds.id}/collect")
+    r = await api.post(path, headers=hdr(viewer), json={"collectors": ["table_index"]})
+    assert r.status_code == 200 and r.json()["errors"] == []
+    assert [t for t, _ in hub.calls] == ["table_index"]
+    assert r.json()["health"] is None, "page collectors were not run"
+
+    await api.post(path, headers=hdr(viewer), json={"collectors": ["table_index"]})
+    assert len(hub.calls) == 1, "the whole catalog is read at most every 10 minutes"
+
+    # A newer index replaces the old one instead of piling up megabytes.
+    await svc.store(db, ds, Collector.TABLE_INDEX, TABLE_INDEX)
+    await svc.store(db, ds, Collector.TABLE_INDEX, TABLE_INDEX)
+    count = await db.scalar(
+        select(func.count())
+        .select_from(Snapshot)
+        .where(Snapshot.datasource_id == ds.id, Snapshot.collector == Collector.TABLE_INDEX)
+    )
+    assert count == 1
+
+
+async def test_bad_lock_and_query_answers_are_refused(
+    api: AsyncClient, db: AsyncSession, use_hub: Any
+) -> None:
+    w = await world(db)
+    too_long = {**SLOW, "queries": [{**SLOW["queries"][0], "text": "x" * 5000}]}
+    negative = {**LOCKS, "waits": [{**LOCKS["waits"][0], "wait_seconds": -1}]}
+    use_hub(FakeHub({"slow_queries": too_long, "locks": negative}))
+    r = await api.post(
+        url(w.t, f"/{w.my_staging.id}/collect"),
+        headers=hdr(w.owner),
+        json={"collectors": ["slow_queries", "locks"]},
+    )
+    assert {e["collector"]: e["code"] for e in r.json()["errors"]} == {
+        "slow_queries": "bad_answer",
+        "locks": "bad_answer",
+    }
+
+
+async def test_the_database_allows_exactly_the_known_collectors(db: AsyncSession) -> None:
+    # alembic check cannot see CHECK constraint changes, so this pins migration 0006 to the enum.
+    definition = await db.scalar(
+        text(
+            "select pg_get_constraintdef(oid) from pg_constraint "
+            "where conname = 'ck_snapshots_collector'"
+        )
+    )
+    assert definition is not None
+    assert set(re.findall(r"'(\w+)'", definition)) == {c.value for c in Collector}

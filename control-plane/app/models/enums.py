@@ -45,11 +45,17 @@ class DbEngine(StrEnum):
 
 
 class Collector(StrEnum):
-    """Read-only questions a connector can answer about a database (connector 0.4.0+)."""
+    """Read-only questions a connector can answer about a database.
+
+    health, table_stats, indexes: connector 0.4.0+; slow_queries, locks, table_index: 0.6.0+.
+    """
 
     HEALTH = "health"
     TABLE_STATS = "table_stats"
     INDEXES = "indexes"
+    SLOW_QUERIES = "slow_queries"
+    LOCKS = "locks"
+    TABLE_INDEX = "table_index"
 
 
 class DatasourceStatus(StrEnum):
