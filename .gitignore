@@ -24,3 +24,4 @@ build/
 !.vscode/settings.json
 .idea/
 .DS_Store
+*.spec

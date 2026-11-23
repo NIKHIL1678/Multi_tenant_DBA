@@ -52,7 +52,7 @@ function AddConnectorFlow({ tenantId, onDone }: { tenantId: string; onDone: () =
       <div className="grid gap-5">
         <DialogHeader>
           <DialogTitle>Install {created.connector.name}</DialogTitle>
-          <DialogDescription>Two steps on your server. Your database passwords stay there.</DialogDescription>
+          <DialogDescription>A few clicks on a computer near your database. Its passwords stay there.</DialogDescription>
         </DialogHeader>
         <InstallSteps tenantId={tenantId} connector={created.connector} enrollment={created.enrollment} />
         <DialogFooter>

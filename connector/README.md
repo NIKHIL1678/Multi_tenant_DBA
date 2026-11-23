@@ -34,6 +34,20 @@ then". On Postgres, table and index details cover the database named in `connect
 4. **Reconnect** by itself after network trouble or a ZipZy restart (1 s → 60 s pauses). It stops
    only when the connector is **revoked** in ZipZy or its key is refused (exit code 2).
 
+## Windows: one file, no setup
+
+For a desktop or laptop next to the database, there is a single `zipzy-connector.exe`:
+
+1. In ZipZy: **Connectors > Add connector**, then download the file and copy the **connection
+   code** (it holds this ZipZy's address and the one-time token).
+2. Double-click the file and paste the code. It asks MySQL or PostgreSQL, where the database is and
+   the monitoring user's password, tests it, registers this computer and connects.
+3. Keep the window open. Later starts skip the questions.
+
+Everything is saved for the current Windows user in `%LOCALAPPDATA%\ZipZyConnector` (delete that
+folder to start over). Build the file with `scripts\build-windows.ps1` (PyInstaller); it is copied
+to `dashboard/public/downloads/`, from where the dashboard offers it.
+
 ## Create a monitoring user
 
 PostgreSQL:
@@ -71,6 +85,7 @@ data through it; `check` warns when the user has write rights.
 ```
 zipzy-connector check   # test every database from this server (no ZipZy needed); exit 1 if one fails
 zipzy-connector run     # enrol on first start, then stay connected to ZipZy (the Docker default)
+zipzy-connector start   # desktop: guided first start, then connect (the .exe without arguments)
 ```
 
 ## Environment

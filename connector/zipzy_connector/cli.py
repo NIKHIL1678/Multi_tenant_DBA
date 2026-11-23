@@ -3,7 +3,9 @@
     zipzy-connector check   test every database in connector.yaml from this server
                             (no ZipZy needed)
     zipzy-connector run     enrol on first start, then stay connected to ZipZy and answer
-                            its allow-listed, read-only requests
+                            its allow-listed, read-only requests (servers, Docker)
+    zipzy-connector start   desktop: asks a few questions the first time, then connects
+                            (what a double-click on the Windows .exe does)
 
 Exit codes: 0 ok, 1 a database is unreachable (check), 2 configuration or enrolment problem.
 """
@@ -107,7 +109,22 @@ async def cmd_run() -> int:
     return await gateway.run_forever(settings.zipzy_url, identity, config)
 
 
+def _start() -> int:
+    from zipzy_connector import desktop
+
+    try:
+        code = asyncio.run(desktop.start())
+    except KeyboardInterrupt:
+        code = 0
+    desktop.pause_before_exit()
+    return code
+
+
 def main(argv: list[str] | None = None) -> None:
+    args_in = sys.argv[1:] if argv is None else argv
+    if not args_in and getattr(sys, "frozen", False):
+        sys.exit(_start())  # the Windows .exe was double-clicked
+
     parser = argparse.ArgumentParser(prog="zipzy-connector", description="ZipZy DBA connector")
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -116,8 +133,11 @@ def main(argv: list[str] | None = None) -> None:
         "--config", help="path to connector.yaml (default: $ZIPZY_CONFIG or /config/connector.yaml)"
     )
     sub.add_parser("run", help="enrol, then stay connected to ZipZy")
-    args = parser.parse_args(argv)
+    sub.add_parser("start", help="desktop: guided first-time setup, then stay connected")
+    args = parser.parse_args(args_in)
 
+    if args.command == "start":
+        sys.exit(_start())
     if args.command == "check":
         code = asyncio.run(cmd_check(args.config))
     else:
