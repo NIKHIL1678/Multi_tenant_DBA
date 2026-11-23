@@ -137,12 +137,36 @@ collect, so the AI and the dashboard always agree on the numbers.
 | `table_stats` | collector | exists (4.3b) |
 | `indexes` | collector | exists (4.3b) |
 | `list_databases` | datasource catalog | exists (4.3a) |
-| `slow_queries` | MySQL `performance_schema.events_statements_summary_by_digest`; Postgres `pg_stat_statements` (reported *unsupported* if not installed) | **new, 5.1** |
-| `locks` | MySQL `performance_schema.data_lock_waits`; Postgres `pg_locks` + `pg_blocking_pids()` | **new, 5.1** |
+| `slow_queries` | MySQL `performance_schema.events_statements_summary_by_digest`; Postgres `pg_stat_statements` (answers *not available* with the reason if missing) | 5.1 |
+| `locks` | MySQL `performance_schema.data_lock_waits` + `INNODB_TRX`; Postgres `pg_stat_activity` + `pg_blocking_pids()` | 5.1 |
+| `find_tables` | the `table_index` collector (every table's name, rows, size), searched in ZipZy | 5.1 |
 
-Tool output is capped (top 20 queries, top 50 tables) and passed to the model as JSON data.
+Tool output is capped (top 20 queries, 50 lock rows, 25 search results) and passed to the
+model as JSON data.
 Names that come from the customer database are data, never instructions; the system prompt
 says so, and rules 1–3 mean an injected instruction has nothing dangerous to call.
+
+## Finding the right table
+
+A server can have thousands of tables (`attendance_2024_01` … one per month, per branch). The
+model never receives the full list. `find_tables(question, schema?, period?)` searches the
+latest `table_index` snapshot inside ZipZy (`app/services/table_search.py`):
+
+- **Families:** tables that differ only by a trailing date or number are one result
+  (`hrm.attendance_*`, 36 tables, 2024-01 … 2026-12); a dated member carries its period.
+- **Matching:** words of the question against words of schema and table names — exact,
+  prefix or small typo; words that match no name ("lowest", "employee who …") and time words
+  are ignored. Ranked by match, then size.
+- **Period:** with `period="2026-11"`, a family lists that month's table and ranks above an
+  equal match without one; a missing month returns the nearest earlier table with a note.
+- **Ambiguity:** when the top two are about equally good, the result is marked `ambiguous`
+  and the agent **asks the person** ("hrm.attendance_* or payroll.attendance?") with the
+  options as buttons — it never guesses.
+- **Context:** the chosen table is kept in the conversation, so "add an index to it" needs no
+  new search; *Explain* passes the exact table and skips the search.
+
+`table_index` lists up to 50,000 tables (biggest first, within one 3 MB message) and is
+refreshed at most every 10 minutes; only its latest snapshot is kept.
 
 ## From suggestion to change (actions)
 
@@ -245,7 +269,30 @@ reports use an in-process scheduler at 02:00 IST; it moves to a worker if we sca
 
 | PR | Scope |
 |---|---|
-| **5.1** | Collectors `slow_queries` + `locks` (connector 0.6.0), AI tool layer and facts, Groq client with fallback, `agent_runs` + `ai_usage_daily`, settings, Queries tab |
-| **5.2** | LangGraph orchestrator + specialists + verifier, `findings` + conversations, Explain button and Ask AI panel |
+| **5.1** ✅ | Collectors `slow_queries`, `locks`, `table_index` (connector 0.6.0), migration 0006, table search (`find_tables`), Queries tab — everything the agents read, with no model involved yet |
+| **5.2** | Groq client with fallback, AI settings, tool layer and facts, LangGraph orchestrator + specialists + verifier, `agent_runs` + `findings` + conversations + `ai_usage_daily`, Explain button and Ask AI panel |
 | **5.3** | `action_requests` + `action_approvals`, server signing key, connector executor and fix user, Fixes tab |
 | **5.4** | Nightly reports, Reports page, usage limits shown in Settings |
+| **5.5** | *Ask your data* (below) |
+
+## 5.5 — Ask your data (planned)
+
+Questions about rows ("show the attendance of the employee with the lowest attendance") need
+the data itself. They get their own mode, built so that **the model writes the query but never
+sees the results**:
+
+```
+question → find_tables (table + period) → model reads column names only → ONE SELECT
+         → Verifier (code) → person sees the SQL and clicks Run
+         → connector runs it as the data reader user → results go only to the person's screen
+```
+
+- **ZipZy tenant:** fixed by the server for the run (as for every tool); RLS in the metadata DB.
+- **The customer's own tenant column** (e.g. `company_id`): when a table has one, the
+  Verifier rejects a query without a filter on it; the person picks the value.
+- **Size:** at most 12 tables per query, `LIMIT 100`, 5 s timeout, read-only session.
+- **Who may run it:** `data.read` in that environment (05 RBAC), **and** the customer's own
+  grants to a separate *data reader* database user (they decide which tables or views), **and**
+  columns marked hidden in `connector.yaml` are blanked before results leave their network.
+- **Not checked by ZipZy:** the customer's application rules (e.g. a manager sees only their
+  team); they enforce those with a view granted to the data reader user.

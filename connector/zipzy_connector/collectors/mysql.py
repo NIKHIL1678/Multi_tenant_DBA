@@ -5,6 +5,10 @@ Sources (all visible to the monitoring user from the README, none of them reads 
     information_schema.TABLES, TABLE_CONSTRAINTS               -> table_stats
     information_schema.STATISTICS, KEY_COLUMN_USAGE,
     performance_schema.table_io_waits_summary_by_index_usage  -> indexes
+    performance_schema.events_statements_summary_by_digest    -> slow_queries
+    performance_schema.data_lock_waits / data_locks,
+    information_schema.INNODB_TRX, PROCESSLIST                 -> locks
+    information_schema.TABLES                                  -> table_index
 """
 
 from datetime import UTC, datetime, timedelta
@@ -18,6 +22,16 @@ from zipzy_connector.collectors.analysis import (
     duplicate_indexes,
     unindexed_foreign_keys,
     unused_indexes,
+)
+from zipzy_connector.collectors.shared import (
+    LONG_TRANSACTION_SECONDS,
+    MAX_LOCK_ROWS,
+    MAX_QUERIES,
+    MAX_TABLE_INDEX,
+    build_table_index,
+    clip_text,
+    since_uptime,
+    unavailable,
 )
 from zipzy_connector.config import DatabaseConfig
 from zipzy_connector.engines.mysql import connect_mysql
@@ -328,3 +342,208 @@ async def indexes(db: DatabaseConfig, password: str) -> dict[str, Any]:
         ],
         "invalid": [],
     }
+
+
+# ---- slow_queries --------------------------------------------------------------------------------
+# performance_schema keeps one row per *normalized* statement ("digest"): every literal value is
+# replaced by "?", so no customer data is in the text. Only application statements are listed;
+# the connector's own questions (SHOW, information_schema, performance_schema) are left out.
+
+# The two statements below share the same WHERE clause (kept literal so the SQL stays static).
+_SLOW_SQL = """
+SELECT SCHEMA_NAME, DIGEST, DIGEST_TEXT, COUNT_STAR, SUM_TIMER_WAIT, AVG_TIMER_WAIT,
+       MAX_TIMER_WAIT, SUM_ROWS_EXAMINED, SUM_ROWS_SENT, SUM_NO_INDEX_USED,
+       SUM_CREATED_TMP_DISK_TABLES
+FROM performance_schema.events_statements_summary_by_digest
+WHERE DIGEST_TEXT IS NOT NULL
+  AND (DIGEST_TEXT LIKE 'SELECT %%' OR DIGEST_TEXT LIKE 'INSERT %%'
+       OR DIGEST_TEXT LIKE 'UPDATE %%' OR DIGEST_TEXT LIKE 'DELETE %%'
+       OR DIGEST_TEXT LIKE 'REPLACE %%' OR DIGEST_TEXT LIKE 'WITH %%')
+  AND DIGEST_TEXT NOT LIKE '%%information_schema%%'
+  AND DIGEST_TEXT NOT LIKE '%%performance_schema%%'
+  AND (SCHEMA_NAME IS NULL OR SCHEMA_NAME NOT IN ('mysql', 'sys', 'information_schema',
+       'performance_schema'))
+ORDER BY SUM_TIMER_WAIT DESC
+LIMIT %s
+"""
+
+_SLOW_COUNT_SQL = """
+SELECT COUNT(*)
+FROM performance_schema.events_statements_summary_by_digest
+WHERE DIGEST_TEXT IS NOT NULL
+  AND (DIGEST_TEXT LIKE 'SELECT %%' OR DIGEST_TEXT LIKE 'INSERT %%'
+       OR DIGEST_TEXT LIKE 'UPDATE %%' OR DIGEST_TEXT LIKE 'DELETE %%'
+       OR DIGEST_TEXT LIKE 'REPLACE %%' OR DIGEST_TEXT LIKE 'WITH %%')
+  AND DIGEST_TEXT NOT LIKE '%%information_schema%%'
+  AND DIGEST_TEXT NOT LIKE '%%performance_schema%%'
+  AND (SCHEMA_NAME IS NULL OR SCHEMA_NAME NOT IN ('mysql', 'sys', 'information_schema',
+       'performance_schema'))
+"""
+
+PICO_PER_MS = 1_000_000_000  # performance_schema timers are in picoseconds
+
+
+def _ms(picoseconds: Any) -> float | None:
+    value = _int(picoseconds)
+    return None if value is None else round(value / PICO_PER_MS, 3)
+
+
+async def slow_queries(db: DatabaseConfig, password: str) -> dict[str, Any]:
+    conn = await connect_mysql(db, password)
+    try:
+        try:
+            total = await _rows(conn, _SLOW_COUNT_SQL, ())
+            rows = await _rows(conn, _SLOW_SQL, (MAX_QUERIES,))
+        except aiomysql.Error:
+            return unavailable(
+                "performance_schema is off or not readable by the monitoring user "
+                "(turn on performance_schema and GRANT SELECT ON performance_schema.*)."
+            )
+        uptime_rows = await _rows(conn, "SHOW GLOBAL STATUS WHERE Variable_name = 'Uptime'")
+    finally:
+        conn.close()
+
+    uptime = _int(uptime_rows[0][1]) if uptime_rows else None
+    return {
+        "available": True,
+        "reason": None,
+        "since": since_uptime(uptime),
+        "total_statements": int(total[0][0]) if total else 0,
+        "queries": [
+            {
+                "id": str(digest),
+                "database": None if schema is None else str(schema),
+                "text": clip_text(str(text)),
+                "calls": _int(calls) or 0,
+                "total_ms": _ms(total_wait) or 0.0,
+                "mean_ms": _ms(avg_wait) or 0.0,
+                "max_ms": _ms(max_wait),
+                "rows_returned": _int(sent),
+                "rows_examined": _int(examined),
+                "no_index_used": _int(no_index),
+                "tmp_disk_tables": _int(tmp_disk),
+                "disk_blocks_read": None,
+            }
+            for (
+                schema,
+                digest,
+                text,
+                calls,
+                total_wait,
+                avg_wait,
+                max_wait,
+                examined,
+                sent,
+                no_index,
+                tmp_disk,
+            ) in rows
+        ],
+    }
+
+
+# ---- locks -------------------------------------------------------------------------------------
+# Who is waiting for whom right now, and transactions left open for a long time. Session ids,
+# users, tables and timings only: the statements themselves (with their values) are never read.
+
+_LOCK_WAITS_SQL = """
+SELECT r.trx_mysql_thread_id, TIMESTAMPDIFF(SECOND, r.trx_wait_started, NOW()),
+       b.trx_mysql_thread_id, TIMESTAMPDIFF(SECOND, b.trx_started, NOW()), b.trx_state,
+       l.OBJECT_SCHEMA, l.OBJECT_NAME, l.INDEX_NAME, l.LOCK_MODE
+FROM performance_schema.data_lock_waits w
+JOIN information_schema.INNODB_TRX r ON r.trx_id = w.REQUESTING_ENGINE_TRANSACTION_ID
+JOIN information_schema.INNODB_TRX b ON b.trx_id = w.BLOCKING_ENGINE_TRANSACTION_ID
+LEFT JOIN performance_schema.data_locks l ON l.ENGINE_LOCK_ID = w.REQUESTING_ENGINE_LOCK_ID
+ORDER BY r.trx_wait_started
+LIMIT %s
+"""
+
+_LONG_TRX_SQL = """
+SELECT t.trx_mysql_thread_id, TIMESTAMPDIFF(SECOND, t.trx_started, NOW()), t.trx_state,
+       t.trx_rows_locked, t.trx_rows_modified, p.USER, p.DB
+FROM information_schema.INNODB_TRX t
+LEFT JOIN information_schema.PROCESSLIST p ON p.ID = t.trx_mysql_thread_id
+WHERE t.trx_started < NOW() - INTERVAL %s SECOND AND t.trx_mysql_thread_id <> CONNECTION_ID()
+ORDER BY t.trx_started
+LIMIT %s
+"""
+
+
+async def locks(db: DatabaseConfig, password: str) -> dict[str, Any]:
+    conn = await connect_mysql(db, password)
+    try:
+        try:
+            waits = await _rows(conn, _LOCK_WAITS_SQL, (MAX_LOCK_ROWS,))
+        except aiomysql.Error:
+            # MariaDB and MySQL 5.7 have no data_lock_waits; performance_schema may be off.
+            return unavailable(
+                "Lock details need MySQL 8.0 or newer with performance_schema on, "
+                "readable by the monitoring user."
+            )
+        long_trx = await _rows(conn, _LONG_TRX_SQL, (LONG_TRANSACTION_SECONDS, MAX_LOCK_ROWS))
+    finally:
+        conn.close()
+
+    return {
+        "available": True,
+        "reason": None,
+        "long_transaction_seconds": LONG_TRANSACTION_SECONDS,
+        "waits": [
+            {
+                "waiting_session": _int(waiting),
+                "wait_seconds": _int(wait_s),
+                "blocking_session": _int(blocking),
+                "blocker_transaction_seconds": _int(blocker_s),
+                "blocker_state": None if state is None else str(state),
+                "schema": None if schema is None else str(schema),
+                "table": None if table is None else str(table),
+                "index": None if index is None else str(index),
+                "lock_mode": None if mode is None else str(mode),
+            }
+            for waiting, wait_s, blocking, blocker_s, state, schema, table, index, mode in waits
+        ],
+        "long_transactions": [
+            {
+                "session": _int(session),
+                "seconds": _int(seconds),
+                "state": None if state is None else str(state),
+                "rows_locked": _int(locked),
+                "rows_modified": _int(modified),
+                "user": None if user is None else str(user),
+                "database": None if dbname is None else str(dbname),
+            }
+            for session, seconds, state, locked, modified, user, dbname in long_trx
+        ],
+    }
+
+
+# ---- table_index -------------------------------------------------------------------------------
+# Every table's name, estimated rows and size, biggest first, so ZipZy can find "attendance"
+# among thousands of tables without asking the server again. Compact: one short list per table.
+
+_TABLE_INDEX_SQL = """
+SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_ROWS,
+       COALESCE(DATA_LENGTH, 0) + COALESCE(INDEX_LENGTH, 0)
+FROM information_schema.TABLES
+WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA NOT IN ('mysql', 'sys',
+    'information_schema', 'performance_schema')
+ORDER BY 4 DESC, 1, 2
+LIMIT %s
+"""
+
+
+async def table_index(db: DatabaseConfig, password: str) -> dict[str, Any]:
+    conn = await connect_mysql(db, password)
+    try:
+        total = await _rows(
+            conn,
+            "SELECT COUNT(*) FROM information_schema.TABLES "
+            "WHERE TABLE_TYPE = 'BASE TABLE' AND TABLE_SCHEMA NOT IN "
+            "('mysql', 'sys', 'information_schema', 'performance_schema')",
+        )
+        rows = await _rows(conn, _TABLE_INDEX_SQL, (MAX_TABLE_INDEX,))
+    finally:
+        conn.close()
+    return build_table_index(
+        int(total[0][0]) if total else 0,
+        ((str(s), str(n), _int(r), _int(b)) for s, n, r, b in rows),
+    )

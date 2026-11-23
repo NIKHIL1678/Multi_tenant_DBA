@@ -131,6 +131,7 @@ jobs:
       TEST_MYSQL_MONITOR_PASSWORD: monitor-pass-123
       TEST_MYSQL_ADMIN_USER: zipzy_admin
       TEST_MYSQL_ADMIN_PASSWORD: admin-pass-123
+      TEST_PG_STATEMENTS: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -150,6 +151,15 @@ jobs:
             GRANT SELECT ON performance_schema.* TO 'zipzy_monitor'@'%';
             CREATE USER 'zipzy_admin'@'%' IDENTIFIED BY 'admin-pass-123';
             GRANT ALL PRIVILEGES ON *.* TO 'zipzy_admin'@'%';"
+
+      - name: Turn on pg_stat_statements (as a customer would, for slow queries)
+        run: |
+          PGPASSWORD=admin-pass-123 psql -h 127.0.0.1 -U zipzy_admin -d shop_test -v ON_ERROR_STOP=1 -c \
+            "ALTER SYSTEM SET shared_preload_libraries = 'pg_stat_statements';"
+          docker restart ${{ job.services.postgres.id }}
+          for i in $(seq 1 30); do pg_isready -h 127.0.0.1 -U zipzy_admin -d shop_test && break; sleep 1; done
+          PGPASSWORD=admin-pass-123 psql -h 127.0.0.1 -U zipzy_admin -d shop_test -v ON_ERROR_STOP=1 -c \
+            "CREATE EXTENSION IF NOT EXISTS pg_stat_statements;"
 
       - name: Install dependencies
         run: uv sync --locked

@@ -247,17 +247,20 @@
         "type": "object"
       },
       "CollectIn": {
+        "description": "Which collectors to run; by default those the server page shows (PAGE_COLLECTORS).",
         "properties": {
           "collectors": {
             "default": [
               "health",
               "table_stats",
-              "indexes"
+              "indexes",
+              "slow_queries",
+              "locks"
             ],
             "items": {
               "$ref": "#/components/schemas/Collector"
             },
-            "maxItems": 3,
+            "maxItems": 6,
             "minItems": 1,
             "title": "Collectors",
             "type": "array"
@@ -267,11 +270,14 @@
         "type": "object"
       },
       "Collector": {
-        "description": "Read-only questions a connector can answer about a database (connector 0.4.0+).",
+        "description": "Read-only questions a connector can answer about a database.\n\nhealth, table_stats, indexes: connector 0.4.0+; slow_queries, locks, table_index: 0.6.0+.",
         "enum": [
           "health",
           "table_stats",
-          "indexes"
+          "indexes",
+          "slow_queries",
+          "locks",
+          "table_index"
         ],
         "title": "Collector",
         "type": "string"
@@ -1583,6 +1589,204 @@
         "title": "InvitationTokenIn",
         "type": "object"
       },
+      "LockWait": {
+        "properties": {
+          "blocker_state": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker State"
+          },
+          "blocker_transaction_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocker Transaction Seconds"
+          },
+          "blocking_session": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blocking Session"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Index"
+          },
+          "lock_mode": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lock Mode"
+          },
+          "schema": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Schema"
+          },
+          "table": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Table"
+          },
+          "wait_seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Seconds"
+          },
+          "waiting_session": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Waiting Session"
+          }
+        },
+        "required": [
+          "waiting_session",
+          "wait_seconds",
+          "blocking_session",
+          "blocker_transaction_seconds",
+          "blocker_state",
+          "schema",
+          "table",
+          "index",
+          "lock_mode"
+        ],
+        "title": "LockWait",
+        "type": "object"
+      },
+      "LocksData": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "long_transaction_seconds": {
+            "default": 60,
+            "minimum": 0.0,
+            "title": "Long Transaction Seconds",
+            "type": "integer"
+          },
+          "long_transactions": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LongTransaction"
+            },
+            "maxItems": 200,
+            "title": "Long Transactions",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "waits": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/LockWait"
+            },
+            "maxItems": 200,
+            "title": "Waits",
+            "type": "array"
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "long_transaction_seconds",
+          "waits",
+          "long_transactions"
+        ],
+        "title": "LocksData",
+        "type": "object"
+      },
+      "LocksSnapshot": {
+        "properties": {
+          "collected_at": {
+            "format": "date-time",
+            "title": "Collected At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/LocksData"
+          }
+        },
+        "required": [
+          "collected_at",
+          "data"
+        ],
+        "title": "LocksSnapshot",
+        "type": "object"
+      },
       "LoginIn": {
         "properties": {
           "email": {
@@ -1603,6 +1807,106 @@
           "password"
         ],
         "title": "LoginIn",
+        "type": "object"
+      },
+      "LongTransaction": {
+        "properties": {
+          "database": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database"
+          },
+          "rows_locked": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Locked"
+          },
+          "rows_modified": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Modified"
+          },
+          "seconds": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seconds"
+          },
+          "session": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session"
+          },
+          "state": {
+            "anyOf": [
+              {
+                "maxLength": 100,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "State"
+          },
+          "user": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User"
+          }
+        },
+        "required": [
+          "session",
+          "seconds",
+          "state",
+          "rows_locked",
+          "rows_modified",
+          "user",
+          "database"
+        ],
+        "title": "LongTransaction",
         "type": "object"
       },
       "MeOut": {
@@ -1834,6 +2138,138 @@
         "title": "Page[AuditEntryOut]",
         "type": "object"
       },
+      "QueryStat": {
+        "properties": {
+          "calls": {
+            "minimum": 0.0,
+            "title": "Calls",
+            "type": "integer"
+          },
+          "database": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Database"
+          },
+          "disk_blocks_read": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Disk Blocks Read"
+          },
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "max_ms": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Max Ms"
+          },
+          "mean_ms": {
+            "minimum": 0.0,
+            "title": "Mean Ms",
+            "type": "number"
+          },
+          "no_index_used": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "No Index Used"
+          },
+          "rows_examined": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Examined"
+          },
+          "rows_returned": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rows Returned"
+          },
+          "text": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          },
+          "tmp_disk_tables": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tmp Disk Tables"
+          },
+          "total_ms": {
+            "minimum": 0.0,
+            "title": "Total Ms",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "database",
+          "text",
+          "calls",
+          "total_ms",
+          "mean_ms",
+          "max_ms",
+          "rows_returned",
+          "rows_examined",
+          "no_index_used",
+          "tmp_disk_tables",
+          "disk_blocks_read"
+        ],
+        "title": "QueryStat",
+        "type": "object"
+      },
       "Replication": {
         "properties": {
           "is_replica": {
@@ -1963,6 +2399,26 @@
               }
             ]
           },
+          "locks": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/LocksSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "slow_queries": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SlowQueriesSnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "table_stats": {
             "anyOf": [
               {
@@ -1979,6 +2435,8 @@
           "health",
           "table_stats",
           "indexes",
+          "slow_queries",
+          "locks",
           "errors"
         ],
         "title": "ServerSnapshotsOut",
@@ -2010,6 +2468,80 @@
           "full_name"
         ],
         "title": "SignupIn",
+        "type": "object"
+      },
+      "SlowQueriesData": {
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "queries": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/QueryStat"
+            },
+            "maxItems": 100,
+            "title": "Queries",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "since": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Since"
+          },
+          "total_statements": {
+            "default": 0,
+            "minimum": 0.0,
+            "title": "Total Statements",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "available",
+          "reason",
+          "since",
+          "total_statements",
+          "queries"
+        ],
+        "title": "SlowQueriesData",
+        "type": "object"
+      },
+      "SlowQueriesSnapshot": {
+        "properties": {
+          "collected_at": {
+            "format": "date-time",
+            "title": "Collected At",
+            "type": "string"
+          },
+          "data": {
+            "$ref": "#/components/schemas/SlowQueriesData"
+          }
+        },
+        "required": [
+          "collected_at",
+          "data"
+        ],
+        "title": "SlowQueriesSnapshot",
         "type": "object"
       },
       "TableRow": {
@@ -4461,7 +4993,7 @@
     },
     "/v1/tenants/{tenant_id}/datasources/{datasource_id}/collect": {
       "post": {
-        "description": "Ask the connector to run collectors now (those that ran in the last 30 s are reused).",
+        "description": "Ask the connector to run collectors now (those that ran very recently are reused).",
         "operationId": "collect_now_v1_tenants__tenant_id__datasources__datasource_id__collect_post",
         "parameters": [
           {

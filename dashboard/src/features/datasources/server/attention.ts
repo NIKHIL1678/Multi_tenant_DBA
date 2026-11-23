@@ -1,10 +1,10 @@
 // "Needs attention" on a server's overview: plain rules over the latest collected statistics.
 // Phase 5 adds the AI's findings next to these; these stay as the always-on baseline.
 
-import { formatBytes, formatCount, formatDate, formatPercent } from '@/lib/format'
-import type { ServerSnapshots } from '@/lib/types'
+import { formatBytes, formatCount, formatDate, formatMs, formatPercent, formatWait } from '@/lib/format'
+import type { QueryStat, ServerSnapshots } from '@/lib/types'
 
-export type ServerTab = 'overview' | 'databases' | 'tables' | 'indexes'
+export type ServerTab = 'overview' | 'databases' | 'tables' | 'indexes' | 'queries'
 
 export type AttentionItem = {
   id: string
@@ -12,6 +12,20 @@ export type AttentionItem = {
   title: string
   detail?: string
   tab?: ServerTab
+}
+
+const SLOW_MS = 100 // average time that makes a statement without an index worth fixing
+const MANY_ROWS = 10_000 // rows read per run that make a statement without an index worth fixing
+const VERY_SLOW_MS = 1000
+
+/** Rows the server read per run (MySQL); many rows for few returned means a missing index. */
+export function rowsReadPerRun(q: QueryStat): number | null {
+  return q.rows_examined != null && q.calls > 0 ? Math.round(q.rows_examined / q.calls) : null
+}
+
+/** Ran without an index AND it costs something: slow on average or reads many rows each run. */
+export function needsIndex(q: QueryStat): boolean {
+  return (q.no_index_used ?? 0) > 0 && (q.mean_ms >= SLOW_MS || (rowsReadPerRun(q) ?? 0) >= MANY_ROWS)
 }
 
 const plural = (n: number, one: string, many = `${one}s`) => `${formatCount(n)} ${n === 1 ? one : many}`
@@ -24,6 +38,53 @@ export function attentionItems(s: ServerSnapshots | undefined): AttentionItem[] 
   const h = s.health?.data
   const ix = s.indexes?.data
   const tables = s.table_stats?.data.tables ?? []
+  const locks = s.locks?.data.available ? s.locks.data : undefined
+  const slow = s.slow_queries?.data.available ? s.slow_queries.data : undefined
+
+  if (locks?.waits.length) {
+    const longest = Math.max(...locks.waits.map((w) => w.wait_seconds ?? 0))
+    const top = locks.waits.find((w) => (w.wait_seconds ?? 0) === longest) ?? locks.waits[0]
+    items.push({
+      id: 'lockwaits',
+      level: 'warning',
+      title: `${plural(locks.waits.length, 'session was', 'sessions were')} waiting for a lock`,
+      detail:
+        top.schema && top.table
+          ? `Longest: ${formatWait(longest)} on ${top.schema}.${top.table}. Another session holds the rows.`
+          : `Longest: ${formatWait(longest)}. Another session holds the rows.`,
+      tab: 'queries',
+    })
+  }
+  if (slow) {
+    const noIndex = slow.queries.filter(needsIndex)
+    if (noIndex.length) {
+      const worst = noIndex.reduce((a, b) => (b.total_ms > a.total_ms ? b : a))
+      items.push({
+        id: 'noindex',
+        level: 'warning',
+        title: `${plural(noIndex.length, 'statement runs', 'statements run')} without a needed index`,
+        detail: `Costliest: ${formatMs(worst.total_ms)} in total over ${formatCount(worst.calls)} runs.`,
+        tab: 'queries',
+      })
+    } else {
+      const slowest = slow.queries.filter((q) => q.mean_ms >= VERY_SLOW_MS)
+      if (slowest.length)
+        items.push({
+          id: 'slowest',
+          level: 'info',
+          title: `${plural(slowest.length, 'statement takes', 'statements take')} over ${formatMs(VERY_SLOW_MS)} on average`,
+          tab: 'queries',
+        })
+    }
+  }
+  if (locks?.long_transactions.length)
+    items.push({
+      id: 'longtrx',
+      level: 'info',
+      title: `${plural(locks.long_transactions.length, 'transaction is', 'transactions are')} open for over ${formatWait(locks.long_transaction_seconds)}`,
+      detail: 'Open transactions can hold locks and stop cleanup. Often an app forgot to commit.',
+      tab: 'queries',
+    })
 
   if (h) {
     const { current, max } = h.connections
@@ -64,6 +125,7 @@ export function attentionItems(s: ServerSnapshots | undefined): AttentionItem[] 
         level: 'info',
         title: 'The slow query log is off',
         detail: 'Slow queries are still found through performance_schema; the log adds detail.',
+        tab: 'queries',
       })
     if (h.settings.log_min_duration_statement === '-1')
       items.push({ id: 'pglog', level: 'info', title: 'Slow statements are not logged' })

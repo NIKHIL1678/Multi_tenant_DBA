@@ -53,6 +53,9 @@ TOOLS: dict[str, Tool] = {
     "health": _collector("health"),
     "table_stats": _collector("table_stats"),
     "indexes": _collector("indexes"),
+    "slow_queries": _collector("slow_queries"),
+    "locks": _collector("locks"),
+    "table_index": _collector("table_index"),
 }
 
 

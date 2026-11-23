@@ -108,3 +108,17 @@ export function formatCompact(n: number): string {
 export function formatPercent(ratio: number): string {
   return `${(ratio * 100).toFixed(ratio >= 0.999 || ratio === 0 ? 0 : 1)}%`
 }
+
+/** 0.42 -> "0.4 ms", 237.9 -> "238 ms", 4_200 -> "4.2 s", 98_000 -> "1.6 min" (query timings). */
+export function formatMs(ms: number): string {
+  if (ms < 10) return `${ms.toFixed(1)} ms`
+  if (ms < 1000) return `${Math.round(ms)} ms`
+  if (ms < 60_000) return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s`
+  if (ms < 3_600_000) return `${(ms / 60_000).toFixed(1)} min`
+  return `${(ms / 3_600_000).toFixed(1)} h`
+}
+
+/** 45 -> "45 s", 340 -> "5 minutes" (short waits in seconds, longer ones in words). */
+export function formatWait(seconds: number): string {
+  return seconds < 60 ? `${seconds} s` : formatDuration(seconds)
+}

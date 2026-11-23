@@ -370,7 +370,7 @@ export interface paths {
         put?: never;
         /**
          * Collect Now
-         * @description Ask the connector to run collectors now (those that ran in the last 30 s are reused).
+         * @description Ask the connector to run collectors now (those that ran very recently are reused).
          */
         post: operations["collect_now_v1_tenants__tenant_id__datasources__datasource_id__collect_post"];
         delete?: never;
@@ -651,24 +651,31 @@ export interface components {
             /** Message */
             message: string;
         };
-        /** CollectIn */
+        /**
+         * CollectIn
+         * @description Which collectors to run; by default those the server page shows (PAGE_COLLECTORS).
+         */
         CollectIn: {
             /**
              * Collectors
              * @default [
              *       "health",
              *       "table_stats",
-             *       "indexes"
+             *       "indexes",
+             *       "slow_queries",
+             *       "locks"
              *     ]
              */
             collectors: components["schemas"]["Collector"][];
         };
         /**
          * Collector
-         * @description Read-only questions a connector can answer about a database (connector 0.4.0+).
+         * @description Read-only questions a connector can answer about a database.
+         *
+         *     health, table_stats, indexes: connector 0.4.0+; slow_queries, locks, table_index: 0.6.0+.
          * @enum {string}
          */
-        Collector: "health" | "table_stats" | "indexes";
+        Collector: "health" | "table_stats" | "indexes" | "slow_queries" | "locks" | "table_index";
         /** Connections */
         Connections: {
             /** Active */
@@ -1142,12 +1149,81 @@ export interface components {
             /** Token */
             token: string;
         };
+        /** LockWait */
+        LockWait: {
+            /** Blocker State */
+            blocker_state: string | null;
+            /** Blocker Transaction Seconds */
+            blocker_transaction_seconds: number | null;
+            /** Blocking Session */
+            blocking_session: number | null;
+            /** Index */
+            index: string | null;
+            /** Lock Mode */
+            lock_mode: string | null;
+            /** Schema */
+            schema: string | null;
+            /** Table */
+            table: string | null;
+            /** Wait Seconds */
+            wait_seconds: number | null;
+            /** Waiting Session */
+            waiting_session: number | null;
+        };
+        /** LocksData */
+        LocksData: {
+            /** Available */
+            available: boolean;
+            /**
+             * Long Transaction Seconds
+             * @default 60
+             */
+            long_transaction_seconds: number;
+            /**
+             * Long Transactions
+             * @default []
+             */
+            long_transactions: components["schemas"]["LongTransaction"][];
+            /** Reason */
+            reason: string | null;
+            /**
+             * Waits
+             * @default []
+             */
+            waits: components["schemas"]["LockWait"][];
+        };
+        /** LocksSnapshot */
+        LocksSnapshot: {
+            /**
+             * Collected At
+             * Format: date-time
+             */
+            collected_at: string;
+            data: components["schemas"]["LocksData"];
+        };
         /** LoginIn */
         LoginIn: {
             /** Email */
             email: string;
             /** Password */
             password: string;
+        };
+        /** LongTransaction */
+        LongTransaction: {
+            /** Database */
+            database: string | null;
+            /** Rows Locked */
+            rows_locked: number | null;
+            /** Rows Modified */
+            rows_modified: number | null;
+            /** Seconds */
+            seconds: number | null;
+            /** Session */
+            session: number | null;
+            /** State */
+            state: string | null;
+            /** User */
+            user: string | null;
         };
         /** MeOut */
         MeOut: {
@@ -1229,6 +1305,33 @@ export interface components {
             /** Next Cursor */
             next_cursor: string | null;
         };
+        /** QueryStat */
+        QueryStat: {
+            /** Calls */
+            calls: number;
+            /** Database */
+            database: string | null;
+            /** Disk Blocks Read */
+            disk_blocks_read: number | null;
+            /** Id */
+            id: string;
+            /** Max Ms */
+            max_ms: number | null;
+            /** Mean Ms */
+            mean_ms: number;
+            /** No Index Used */
+            no_index_used: number | null;
+            /** Rows Examined */
+            rows_examined: number | null;
+            /** Rows Returned */
+            rows_returned: number | null;
+            /** Text */
+            text: string;
+            /** Tmp Disk Tables */
+            tmp_disk_tables: number | null;
+            /** Total Ms */
+            total_ms: number;
+        };
         /** Replication */
         Replication: {
             /** Is Replica */
@@ -1281,6 +1384,8 @@ export interface components {
             errors: components["schemas"]["CollectError"][];
             health: components["schemas"]["HealthSnapshot"] | null;
             indexes: components["schemas"]["IndexesSnapshot"] | null;
+            locks: components["schemas"]["LocksSnapshot"] | null;
+            slow_queries: components["schemas"]["SlowQueriesSnapshot"] | null;
             table_stats: components["schemas"]["TableStatsSnapshot"] | null;
         };
         /** SignupIn */
@@ -1294,6 +1399,34 @@ export interface components {
             full_name: string;
             /** Password */
             password: string;
+        };
+        /** SlowQueriesData */
+        SlowQueriesData: {
+            /** Available */
+            available: boolean;
+            /**
+             * Queries
+             * @default []
+             */
+            queries: components["schemas"]["QueryStat"][];
+            /** Reason */
+            reason: string | null;
+            /** Since */
+            since: string | null;
+            /**
+             * Total Statements
+             * @default 0
+             */
+            total_statements: number;
+        };
+        /** SlowQueriesSnapshot */
+        SlowQueriesSnapshot: {
+            /**
+             * Collected At
+             * Format: date-time
+             */
+            collected_at: string;
+            data: components["schemas"]["SlowQueriesData"];
         };
         /** TableRow */
         TableRow: {
