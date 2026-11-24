@@ -5,9 +5,17 @@ from typing import Any
 
 import pytest
 
-from app.ai.graph import NO_ROWS, OFF_TOPIC, build_graph
+from app.ai.graph import NO_ROWS, OFF_TOPIC, STARTERS, build_graph
 from app.ai.llm import AIUnavailableError, Usage
-from app.ai.outputs import ActionOut, AnswerOut, Category, FindingOut, PlanOut, SpecialistOut
+from app.ai.outputs import (
+    ActionOut,
+    AnswerOut,
+    Category,
+    FindingOut,
+    Intent,
+    PlanOut,
+    SpecialistOut,
+)
 from app.models.enums import FindingSeverity, Specialist
 from tests.ai_fakes import FakeLLM, FakeTools, unavailable
 
@@ -18,8 +26,7 @@ def plan(
     *specialists: Specialist, table: str | None = None, period: str | None = None, **kw: Any
 ) -> PlanOut:
     return PlanOut(
-        about_this_database=kw.get("about", True),
-        asks_for_row_data=kw.get("rows", False),
+        intent=kw.get("intent", Intent.DATABASE),
         specialists=list(specialists),
         table=table,
         period=period,
@@ -154,13 +161,19 @@ async def test_the_chosen_table_is_used_for_follow_ups() -> None:
 
 
 async def test_off_topic_and_row_questions_are_answered_without_specialists() -> None:
-    llm = FakeLLM(plan=plan(about=False))
+    llm = FakeLLM(plan=plan(intent=Intent.OTHER))
     result, _, _ = await run(llm, question="Write me a poem")
     assert result["answer"] == OFF_TOPIC and llm.names() == ["plan"]
 
-    llm = FakeLLM(plan=plan(rows=True))
-    result, _, _ = await run(llm, question="Who has the lowest attendance?")
+    llm = FakeLLM(plan=plan(intent=Intent.ROW_DATA, table="attendance"))
+    result, _, _ = await run(llm, question="find the employee with highest attendance")
     assert result["answer"] == NO_ROWS and llm.names() == ["plan"]
+    assert result["follow_ups"][0] == "How is the attendance table doing?"
+
+    llm = FakeLLM(plan=plan(intent=Intent.GREETING))
+    result, _, _ = await run(llm, question="Hii")
+    assert result["answer"].startswith("Hello! I look after office-mysql")
+    assert result["follow_ups"] == STARTERS and llm.names() == ["plan"]
 
 
 async def test_made_up_evidence_tables_and_unsafe_sql_are_removed() -> None:

@@ -216,6 +216,26 @@ export interface paths {
         patch: operations["update_tenant_v1_tenants__tenant_id__patch"];
         trace?: never;
     };
+    "/v1/tenants/{tenant_id}/ai/conversations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List All Conversations
+         * @description My conversations about every server I may still ask about (newest first).
+         */
+        get: operations["list_all_conversations_v1_tenants__tenant_id__ai_conversations_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/tenants/{tenant_id}/ai/conversations/{conversation_id}": {
         parameters: {
             query?: never;
@@ -901,6 +921,41 @@ export interface components {
             messages: components["schemas"]["MessageOut"][];
             /** Runs */
             runs: components["schemas"]["RunOut"][];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * ConversationListItem
+         * @description A conversation in the AI Assistant list, with the server it is about.
+         */
+        ConversationListItem: {
+            /** Context */
+            context: {
+                [key: string]: string;
+            };
+            /**
+             * Datasource Id
+             * Format: uuid
+             */
+            datasource_id: string;
+            /** Datasource Name */
+            datasource_name: string;
+            /** Engine */
+            engine: string;
+            /** Environment Name */
+            environment_name: string;
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /** Is Production */
+            is_production: boolean;
             /** Title */
             title: string;
             /**
@@ -2335,6 +2390,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TenantOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_all_conversations_v1_tenants__tenant_id__ai_conversations_get: {
+        parameters: {
+            query?: never;
+            header?: {
+                authorization?: string | null;
+                "X-Dev-User"?: string | null;
+            };
+            path: {
+                tenant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConversationListItem"][];
                 };
             };
             /** @description Validation Error */

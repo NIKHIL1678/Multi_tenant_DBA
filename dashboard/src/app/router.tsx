@@ -3,6 +3,7 @@ import { createBrowserRouter } from 'react-router'
 import { HomeLayout } from '@/app/layouts/home-layout'
 import { TenantLayout } from '@/app/layouts/tenant-layout'
 import { RequireAuth } from '@/app/require-auth'
+import { AiPage } from '@/features/ai/ai-page'
 import { AuditPage } from '@/features/audit/audit-page'
 import { LoginPage } from '@/features/auth/login-page'
 import { SignupPage } from '@/features/auth/signup-page'
@@ -36,6 +37,7 @@ export const router = createBrowserRouter([
         element: <TenantLayout />,
         children: [
           { index: true, element: <OverviewPage /> },
+          { path: 'ai', element: <AiPage /> },
           { path: 'databases', element: <DatabasesPage /> },
           { path: 'databases/:datasourceId', element: <ServerPage /> },
           { path: 'environments', element: <EnvironmentsPage /> },

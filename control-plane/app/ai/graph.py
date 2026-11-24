@@ -24,7 +24,7 @@ from langgraph.types import Send
 
 from app.ai import facts, prompts
 from app.ai.llm import LLM, AIUnavailableError, Usage
-from app.ai.outputs import AnswerOut, PlanOut, SpecialistOut
+from app.ai.outputs import AnswerOut, Intent, PlanOut, SpecialistOut
 from app.ai.problems import PROBLEMS
 from app.ai.verify import VerifiedFinding, action_json, verify
 from app.models.enums import AgentRunKind, Collector, Specialist
@@ -60,8 +60,26 @@ OFF_TOPIC = (
 )
 NO_ROWS = (
     "I only see statistics and structure, not the rows inside tables, so I cannot show stored "
-    "values. I can tell you how a table is used: its size, indexes and slow statements."
+    "values such as records, people or amounts. I can tell you how a table is used: its size, "
+    "indexes and slow statements."
 )
+STARTERS = [
+    "How is this server doing?",
+    "Which statements are slowest, and why?",
+    "Are there indexes I could remove?",
+]
+
+
+def greeting(server: str) -> str:
+    return (
+        f"Hello! I look after {server}. Ask me how it is doing, which statements are slow and "
+        "why, or which tables and indexes need attention. I read its statistics, never the rows "
+        "inside tables."
+    )
+
+
+def table_starters(words: str) -> list[str]:
+    return [f"How is the {words} table doing?", f"Is the {words} table missing an index?"]
 
 
 @dataclass(slots=True)
@@ -162,13 +180,14 @@ def build_graph(llm: LLM, tools: Toolbox, usage: Usage, progress: Progress) -> A
             PlanOut,
             "plan",
         )
-        if not out.about_this_database:
-            return {"answer": OFF_TOPIC, "follow_ups": [], "done": True}
-        notes: list[str] = []
-        if out.asks_for_row_data:
-            if not out.specialists:
-                return {"answer": NO_ROWS, "follow_ups": [], "done": True}
-            notes.append(NO_ROWS)
+        if out.intent == Intent.GREETING:
+            return {"answer": greeting(state["server"]), "follow_ups": STARTERS, "done": True}
+        if out.intent == Intent.ROW_DATA:
+            words = (out.table or "").strip()
+            follow_ups = table_starters(words) if words else STARTERS[:2]
+            return {"answer": NO_ROWS, "follow_ups": follow_ups, "done": True}
+        if out.intent != Intent.DATABASE:
+            return {"answer": OFF_TOPIC, "follow_ups": STARTERS, "done": True}
         specialists = [s.value for s in dict.fromkeys(out.specialists)] or [
             s.value for s in Specialist
         ]
@@ -176,7 +195,6 @@ def build_graph(llm: LLM, tools: Toolbox, usage: Usage, progress: Progress) -> A
             "specialists": specialists,
             "table_words": out.table,
             "period": _period(out.period) or context.get("period"),
-            "notes": notes,
         }
 
     # ---- resolve the table -----------------------------------------------------------------

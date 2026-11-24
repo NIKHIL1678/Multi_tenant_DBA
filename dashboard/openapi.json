@@ -694,6 +694,66 @@
         "title": "ConversationDetailOut",
         "type": "object"
       },
+      "ConversationListItem": {
+        "description": "A conversation in the AI Assistant list, with the server it is about.",
+        "properties": {
+          "context": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "title": "Context",
+            "type": "object"
+          },
+          "datasource_id": {
+            "format": "uuid",
+            "title": "Datasource Id",
+            "type": "string"
+          },
+          "datasource_name": {
+            "title": "Datasource Name",
+            "type": "string"
+          },
+          "engine": {
+            "title": "Engine",
+            "type": "string"
+          },
+          "environment_name": {
+            "title": "Environment Name",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_production": {
+            "title": "Is Production",
+            "type": "boolean"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "datasource_id",
+          "title",
+          "context",
+          "updated_at",
+          "datasource_name",
+          "engine",
+          "environment_name",
+          "is_production"
+        ],
+        "title": "ConversationListItem",
+        "type": "object"
+      },
       "ConversationOut": {
         "properties": {
           "context": {
@@ -4377,6 +4437,86 @@
         "summary": "Update Tenant",
         "tags": [
           "tenants"
+        ]
+      }
+    },
+    "/v1/tenants/{tenant_id}/ai/conversations": {
+      "get": {
+        "description": "My conversations about every server I may still ask about (newest first).",
+        "operationId": "list_all_conversations_v1_tenants__tenant_id__ai_conversations_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "tenant_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Tenant Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "header",
+            "name": "X-Dev-User",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "X-Dev-User"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConversationListItem"
+                  },
+                  "title": "Response List All Conversations V1 Tenants  Tenant Id  Ai Conversations Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "List All Conversations",
+        "tags": [
+          "ai"
         ]
       }
     },

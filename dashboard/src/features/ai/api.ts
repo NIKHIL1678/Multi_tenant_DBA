@@ -4,9 +4,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
-import type { AgentRun, AgentRunIn, AiConversation, AiConversationDetail, AiStatus } from '@/lib/types'
+import type {
+  AgentRun,
+  AgentRunIn,
+  AiConversation,
+  AiConversationDetail,
+  AiConversationItem,
+  AiStatus,
+} from '@/lib/types'
 
 export const aiKeys = {
+  all: (tenantId: string) => ['tenants', tenantId, 'ai', 'conversations'] as const,
   status: (tenantId: string) => ['tenants', tenantId, 'ai', 'status'] as const,
   run: (tenantId: string, id: string) => ['tenants', tenantId, 'ai', 'runs', id] as const,
   conversations: (tenantId: string, datasourceId: string) =>
@@ -36,6 +44,7 @@ export function useStartRun(tenantId: string, datasourceId: string) {
       queryClient.setQueryData(aiKeys.run(tenantId, run.id), run)
       void queryClient.invalidateQueries({ queryKey: aiKeys.status(tenantId) })
       void queryClient.invalidateQueries({ queryKey: aiKeys.conversations(tenantId, datasourceId) })
+      void queryClient.invalidateQueries({ queryKey: aiKeys.all(tenantId), exact: true })
       if (run.conversation_id)
         void queryClient.invalidateQueries({ queryKey: aiKeys.conversation(tenantId, run.conversation_id) })
     },
@@ -49,6 +58,14 @@ export function useRun(tenantId: string, id: string | null) {
     queryFn: () => api<AgentRun>(`/v1/tenants/${tenantId}/ai/runs/${id}`),
     enabled: id !== null,
     refetchInterval: (query) => (isActive(query.state.data) ? 1000 : false),
+  })
+}
+
+/** My conversations about every server I may ask about, newest first (AI Assistant page). */
+export function useAllConversations(tenantId: string) {
+  return useQuery({
+    queryKey: aiKeys.all(tenantId),
+    queryFn: () => api<AiConversationItem[]>(`/v1/tenants/${tenantId}/ai/conversations`),
   })
 }
 

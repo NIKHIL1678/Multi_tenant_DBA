@@ -64,8 +64,11 @@ flowchart TD
     C --> OUT(["Answer, verified findings, suggested SQL"])
 ```
 
-- **plan** — chat: one model call returns whether the question is about this server, whether
-  it asks for row values, the specialists (1–3), the words naming a table and a period.
+- **plan** — chat: one model call returns the message's **intent**, one of `database`,
+  `row_data` (values inside tables: answered with what the agents can and cannot see),
+  `greeting` (a short hello with example questions) or `other`; then for `database` the
+  specialists (1–3), the words naming a table and a period. One choice instead of two yes/no
+  fields, so a row-data question is never mistaken for an off-topic one.
   *Explain* makes no call: the problem decides the specialists (`app/ai/problems.py`).
 - **resolve** — `find_tables` (code). Two equally good matches end the run as `needs_input`
   with the tables as buttons; the person's choice starts the next run with the same question
@@ -246,6 +249,7 @@ All under `/v1/tenants/{tenant_id}`.
 | `GET /ai/status` | AI set up?; runs and tokens used today and the limits | 5.2 |
 | `POST /datasources/{id}/ai/runs` | Start a run → `202` + run. `{kind: "chat", message, conversation_id?}`, `{kind: "chat", table, conversation_id}` (answer to "Which table?"), `{kind: "explain", problem, problem_title}` | 5.2 |
 | `GET /ai/runs/{run_id}` | Status, progress steps, answer, follow-ups, clarification, notes, findings with evidence | 5.2 |
+| `GET /ai/conversations` | My conversations about every server I may still ask about, with server name and environment | 5.2b |
 | `GET /datasources/{id}/ai/conversations` | My conversations about this datasource | 5.2 |
 | `GET /ai/conversations/{id}` | One conversation: messages and its runs | 5.2 |
 | `GET /datasources/{id}/actions` · `POST /actions/{id}/approve` · `/reject` · `/execute` | Approval workflow | 5.3 |
@@ -280,9 +284,14 @@ in-process scheduler at 02:00 IST; it moves to a worker if we scale out.
 
 ## Dashboard
 
+- **AI Assistant** (sidebar, `/t/{id}/ai`, 5.2b): the main place to chat. Left: my
+  conversations across servers and *New chat*; right: the chat. A new chat starts with a server
+  picker that remembers the last server (or picks the only one); one server per conversation.
+  On phones the list is a picker above the chat. `?c=<conversation>` opens one directly.
 - **Server page → Needs attention:** an *Explain* button on each problem.
-- **Server page → Ask AI** panel: chat with progress steps and evidence chips (`T3`, `Q2`)
-  that open the underlying numbers.
+- **Server page → Ask AI** panel: quick questions about that server, with progress steps and
+  evidence chips (`T3`, `Q2`) that show the underlying numbers; *Open in AI Assistant* moves the
+  conversation to the full page. Both use the same chat component (`features/ai/chat.tsx`).
 - **Server page → Queries** tab: slow queries and lock waits (5.1).
 - **Server page → Fixes** tab: actions by status, with Approve / Reject / Run or Copy SQL.
 - **Reports** page per server.

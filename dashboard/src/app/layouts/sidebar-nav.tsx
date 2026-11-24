@@ -1,4 +1,14 @@
-import { Database, History, LayoutDashboard, Layers, PlugZap, Settings, Users, type LucideIcon } from 'lucide-react'
+import {
+  Database,
+  History,
+  LayoutDashboard,
+  Layers,
+  PlugZap,
+  Settings,
+  Sparkles,
+  Users,
+  type LucideIcon,
+} from 'lucide-react'
 import { NavLink } from 'react-router'
 
 import { Permission } from '@/lib/permissions'
@@ -10,6 +20,7 @@ type NavItem = { to: string; label: string; icon: LucideIcon; end?: boolean; nee
 /** One list for the whole app: the sidebar on desktop and the slide-in menu on phones. */
 const NAV_ITEMS: NavItem[] = [
   { to: '', label: 'Overview', icon: LayoutDashboard, end: true },
+  { to: 'ai', label: 'AI Assistant', icon: Sparkles, needs: Permission.FindingsRead },
   { to: 'databases', label: 'Databases', icon: Database },
   { to: 'environments', label: 'Environments', icon: Layers },
   { to: 'connectors', label: 'Connectors', icon: PlugZap },

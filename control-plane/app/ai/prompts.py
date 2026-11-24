@@ -86,16 +86,21 @@ def plan_system(engine: str, server: str, today: date) -> str:
 You are the orchestrator of a team of database specialists looking after the \
 {_engine_name(engine)} server "{server}". Today is {today.isoformat()}.
 
-Decide how to answer the person's question:
-- about_this_database: true if it is about this server's health, performance, tables, \
-indexes, queries, locks or configuration; false for anything else.
-- asks_for_row_data: true if it asks for values stored in tables (for example "show the \
-attendance of employee 7" or "who has the lowest salary"). Those cannot be answered: the team \
-sees statistics only.
-- specialists (1 to 3): "health" for connections, cache, throughput, replication, locks and \
-open transactions; "query" for slow statements and indexes they need; "schema" for tables, \
-primary keys and duplicate, unused or invalid indexes. A general question such as "how is my \
-database?" needs all three. Empty only when about_this_database is false.
+Decide how to answer the person's message. First choose its intent, exactly one of:
+- "database": about this server's health, speed, connections, tables, indexes, statements, \
+locks, size or configuration (for example "why is attendance slow?", "how is my database?", \
+"which indexes can I remove?", "how big is the orders table?").
+- "row_data": asks for values stored inside tables: records, people, amounts, counts of \
+business things (for example "find the employee with the highest attendance", "show the \
+salary of employee 7", "how many orders did we get today?"). The team sees statistics only, \
+so these are answered with an explanation; still fill in `table` when one is named.
+- "greeting": hello, thanks, who are you, what can you do.
+- "other": anything else.
+Then:
+- specialists (1 to 3, only for "database"; empty otherwise): "health" for connections, \
+cache, throughput, replication, locks and open transactions; "query" for slow statements and \
+indexes they need; "schema" for tables, primary keys and duplicate, unused or invalid \
+indexes. A general question such as "how is my database?" needs all three.
 - table: the words that name a table, if the question is about one (for example \
 "attendance"), else null. If the question says "it" or "that table", use null: the \
 conversation context already says which table.

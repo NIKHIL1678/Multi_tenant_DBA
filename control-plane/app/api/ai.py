@@ -3,7 +3,8 @@
 GET  /v1/tenants/{tid}/ai/status                                   is AI set up; today's use
 POST /v1/tenants/{tid}/datasources/{dsid}/ai/runs                   start a run -> 202
 GET  /v1/tenants/{tid}/ai/runs/{run_id}                             progress / answer (poll)
-GET  /v1/tenants/{tid}/datasources/{dsid}/ai/conversations          my conversations
+GET  /v1/tenants/{tid}/ai/conversations                            my conversations, all servers
+GET  /v1/tenants/{tid}/datasources/{dsid}/ai/conversations          my conversations, one server
 GET  /v1/tenants/{tid}/ai/conversations/{conversation_id}           one, with messages and runs
 
 Who: a person who can see the datasource (metadata.read in its environment) and read
@@ -27,13 +28,14 @@ from app.auth.permissions import require_member
 from app.core.config import get_settings
 from app.core.db import SessionFactory, get_session_factory
 from app.gateway.hub import ConnectorHub, get_hub
-from app.models import AgentRun, AiConversation, AiMessage, Finding
+from app.models import AgentRun, AiConversation, AiMessage, Datasource, Environment, Finding
 from app.models.enums import AgentRunKind
 from app.rbac.catalog import Permission
-from app.rbac.service import AccessContext
+from app.rbac.service import AccessContext, environments_with_permission
 from app.schemas.ai import (
     AiStatusOut,
     ConversationDetailOut,
+    ConversationListItem,
     ConversationOut,
     MessageOut,
     RunIn,
@@ -184,6 +186,49 @@ async def get_run(
     run = await _own_run(session, user, tenant_id, run_id)
     await session.refresh(run)  # progress is written by the background run
     return await _run_out(session, run)
+
+
+@router.get("/ai/conversations")
+async def list_all_conversations(
+    tenant_id: uuid.UUID, _: Member, user: CurrentUser, session: DbSession
+) -> list[ConversationListItem]:
+    """My conversations about every server I may still ask about (newest first)."""
+    may_see = await environments_with_permission(
+        session, user_id=user.user_id, tenant_id=tenant_id, permission=Permission.METADATA_READ
+    )
+    may_read = await environments_with_permission(
+        session, user_id=user.user_id, tenant_id=tenant_id, permission=Permission.FINDINGS_READ
+    )
+    allowed = may_see & may_read
+    if not allowed:
+        return []
+    rows = await session.execute(
+        select(AiConversation, Datasource, Environment)
+        .join(Datasource, Datasource.id == AiConversation.datasource_id)
+        .join(Environment, Environment.id == Datasource.environment_id)
+        .where(
+            AiConversation.tenant_id == tenant_id,
+            AiConversation.user_id == user.user_id,
+            Datasource.tenant_id == tenant_id,
+            Datasource.environment_id.in_(allowed),
+        )
+        .order_by(AiConversation.updated_at.desc())
+        .limit(MAX_CONVERSATIONS)
+    )
+    return [
+        ConversationListItem(
+            id=c.id,
+            datasource_id=c.datasource_id,
+            title=c.title,
+            context={k: str(v) for k, v in c.context.items()},
+            updated_at=c.updated_at,
+            datasource_name=ds.local_name,
+            engine=ds.engine,
+            environment_name=env.name,
+            is_production=env.is_production,
+        )
+        for c, ds, env in rows
+    ]
 
 
 @router.get("/datasources/{datasource_id}/ai/conversations")

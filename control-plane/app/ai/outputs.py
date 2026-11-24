@@ -37,11 +37,20 @@ class Category(StrEnum):
     OTHER = "other"
 
 
+class Intent(StrEnum):
+    """What the message is, decided first and as one choice (two separate yes/no fields let the
+    model call a row-data question "not about the database")."""
+
+    DATABASE = "database"  # this server's health, performance, tables, indexes, queries, locks
+    ROW_DATA = "row_data"  # values stored in tables ("employee with the highest attendance")
+    GREETING = "greeting"  # hello, thanks, who are you, what can you do
+    OTHER = "other"  # anything else
+
+
 class PlanOut(_Out):
     """The orchestrator's plan for a chat question."""
 
-    about_this_database: bool  # false: not about this server's health, performance or schema
-    asks_for_row_data: bool  # wants rows/values from tables (not available: statistics only)
+    intent: Intent
     specialists: Annotated[list[Specialist], Field(max_length=3)]
     table: Annotated[str, Field(max_length=200)] | None  # words naming a table, or null
     period: Annotated[str, Field(max_length=20)] | None  # "2026-11" or "2026"; code checks it

@@ -108,6 +108,15 @@ class ConversationOut(BaseModel):
     updated_at: datetime
 
 
+class ConversationListItem(ConversationOut):
+    """A conversation in the AI Assistant list, with the server it is about."""
+
+    datasource_name: str
+    engine: str
+    environment_name: str
+    is_production: bool
+
+
 class ConversationDetailOut(ConversationOut):
     messages: list[MessageOut]
     runs: list[RunOut]  # the runs of this conversation, oldest first (answers, findings)

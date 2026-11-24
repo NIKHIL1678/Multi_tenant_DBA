@@ -14,14 +14,22 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.ai import runner
-from app.ai.outputs import ActionOut, AnswerOut, Category, FindingOut, PlanOut, SpecialistOut
+from app.ai.outputs import (
+    ActionOut,
+    AnswerOut,
+    Category,
+    FindingOut,
+    Intent,
+    PlanOut,
+    SpecialistOut,
+)
 from app.core.config import get_settings
 from app.core.db import get_session_factory
 from app.gateway.hub import get_hub
 from app.models import AgentRun, AiConversation, AiUsageDaily, Finding
 from app.models.enums import AgentRunStatus, FindingSeverity, Specialist
 from tests.ai_fakes import FakeLLM, unavailable
-from tests.factories import make_tenant, make_user
+from tests.factories import make_custom_role, make_tenant, make_user, override_role
 from tests.test_collectors import TABLE_INDEX, FakeHub
 from tests.test_datasources import R, hdr, member, world
 
@@ -31,8 +39,7 @@ INDEX_SQL = "CREATE INDEX idx_att_emp_day ON zipzy_hrm.attendance (emp_id, day)"
 
 def plan(*specialists: Specialist, table: str | None = None, **kw: Any) -> PlanOut:
     return PlanOut(
-        about_this_database=True,
-        asks_for_row_data=False,
+        intent=kw.get("intent", Intent.DATABASE),
         specialists=list(specialists),
         table=table,
         period=kw.get("period"),
@@ -461,3 +468,39 @@ def test_every_dashboard_problem_can_be_explained() -> None:
     )
     ids = set(re.findall(r"id: '([a-z]+)'", source.read_text(encoding="utf-8")))
     assert ids and ids == set(PROBLEMS), f"dashboard {sorted(ids)} vs server {sorted(PROBLEMS)}"
+
+
+async def test_all_my_conversations_across_servers(
+    ai: Harness, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    w = await world(db)
+    dba, membership = await member(db, w.t, R.DBA)
+    use_llm(monkeypatch, FakeLLM(plan=plan(intent=Intent.OTHER)))
+    for ds in (w.my_staging, w.pg_prod):
+        r = await ai.api.post(
+            runs_url(w.t, ds),
+            headers=hdr(dba),
+            json={"kind": "chat", "message": f"About {ds.local_name}?"},
+        )
+        assert r.status_code == 202, r.text
+        await ai.run_scheduled()
+    other = await ai.api.post(
+        runs_url(w.t, w.my_staging),
+        headers=hdr(w.owner),
+        json={"kind": "chat", "message": "Owner's own"},
+    )
+    assert other.status_code == 202
+    await ai.run_scheduled()
+
+    listed = (await ai.api.get(f"/v1/tenants/{w.t.id}/ai/conversations", headers=hdr(dba))).json()
+    assert {c["datasource_name"] for c in listed} == {w.my_staging.local_name, w.pg_prod.local_name}
+    assert all(c["title"] != "Owner's own" for c in listed), "only my own conversations"
+    prod = next(c for c in listed if c["datasource_id"] == str(w.pg_prod.id))
+    assert prod["is_production"] is True and prod["engine"] == "postgres"
+    assert prod["environment_name"] == w.prod.name
+
+    # Losing access to production hides those conversations at once.
+    blind = await make_custom_role(db, w.t, "blind", set())
+    await override_role(db, membership, w.prod, blind.id)
+    listed = (await ai.api.get(f"/v1/tenants/{w.t.id}/ai/conversations", headers=hdr(dba))).json()
+    assert [c["datasource_name"] for c in listed] == [w.my_staging.local_name]
